@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* Print Styles - Only @page rules that can't be done with Tailwind */
+@media print {
+  @page {
+    margin: 0.5cm;
+    size: landscape;
+  }
+  
+  /* Robust hiding of sidebar and layout artifacts */
+  nav, aside, .sidebar, [class*="sidebar"] {
+    display: none !important;
+  }
+
+  /* Reset layout constraints */
+  main, .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+  }
+}
+

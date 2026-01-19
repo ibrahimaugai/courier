@@ -1,0 +1,761 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Minimal schema: keeping only User model and UserRole enum
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String    @map("password_hash")
+  role         UserRole  @default(USER)
+  staffCode    String?   @map("staff_code")
+  stationId    String?   @map("station_id")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  station                   Station?         @relation(fields: [stationId], references: [id])
+  cnAllocations             CnAllocation[]   @relation("CnAllocatedBy")
+  batchStaff                Batch[]          @relation("BatchStaff")
+  batchClosedBy             Batch[]          @relation("BatchClosedBy")
+  manifestCreatedBy         Manifest[]
+  arrivalScanScannedBy      ArrivalScan[]
+  deliverySheetCreatedBy    DeliverySheet[]
+  collectionCollectedBy     Collection[]
+  userConfiguration         Configuration?   @relation("UserConfiguration")
+  configurationUpdatedBy    Configuration[]
+  voidRecordVoidedBy        VoidRecord[]
+  shiftCloseClosedBy        ShiftClose[]
+  bookingCreatedBy          Booking[]        @relation("BookingCreatedBy")
+  bookingHistoryPerformedBy BookingHistory[] @relation("BookingHistoryPerformedBy")
+  pickupRequestsCreated     PickupRequest[]  @relation("PickupCreatedBy")
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ============================================
+// LOCATION & ROUTING
+// ============================================
+
+model City {
+  id        String   @id @default(uuid())
+  cityCode  String   @unique @map("city_code")
+  cityName  String   @map("city_name")
+  province  String?
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  stations                Station[]
+  originPricingRules      PricingRule[] @relation("OriginPricing")
+  destinationPricingRules PricingRule[] @relation("DestinationPricing")
+  customers               Customer[]
+  originBookings          Booking[]     @relation("OriginBooking")
+  destinationBookings     Booking[]     @relation("DestinationBooking")
+
+  @@map("cities")
+}
+
+model Station {
+  id          String   @id @default(uuid())
+  stationCode String   @unique @map("station_code")
+  stationName String   @map("station_name")
+  cityId      String   @map("city_id")
+  address     String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  city              City            @relation(fields: [cityId], references: [id])
+  users             User[]
+  cnAllocations     CnAllocation[]
+  batches           Batch[]
+  manifests         Manifest[]
+  deliverySheets    DeliverySheet[]
+  arrivalScans      ArrivalScan[]
+  configurations    Configuration[]
+  originRoutes      Route[]         @relation("OriginRoute")
+  destinationRoutes Route[]         @relation("DestinationRoute")
+
+  @@map("stations")
+}
+
+model Route {
+  id                   String   @id @default(uuid())
+  routeCode            String   @unique @map("route_code")
+  routeName            String   @map("route_name")
+  originStationId      String   @map("origin_station_id")
+  destinationStationId String   @map("destination_station_id")
+  status               String   @default("active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  originStation      Station    @relation("OriginRoute", fields: [originStationId], references: [id])
+  destinationStation Station    @relation("DestinationRoute", fields: [destinationStationId], references: [id])
+  batches            Batch[]
+  manifests          Manifest[]
+  deliverySheets     DeliverySheet[]
+
+  @@map("routes")
+}
+
+// ============================================
+// SERVICES & PRODUCTS
+// ============================================
+
+model Service {
+  id          String   @id @default(uuid())
+  serviceCode String   @unique @map("service_code")
+  serviceName String   @map("service_name")
+  serviceType String   @map("service_type")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pricingRules PricingRule[]
+  products     Product[]
+  bookings     Booking[]
+
+  @@map("services")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  productCode String   @unique @map("product_code")
+  productName String   @map("product_name")
+  serviceId   String   @map("service_id")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  service       Service        @relation(fields: [serviceId], references: [id])
+  cnAllocations CnAllocation[]
+  bookings      Booking[]
+
+  @@map("products")
+}
+
+// ============================================
+// CUSTOMERS
+// ============================================
+
+model Customer {
+  id           String   @id @default(uuid())
+  customerCode String   @unique @map("customer_code")
+  name         String
+  phone        String
+  email        String?
+  address      String?
+  cityId       String?  @map("city_id")
+  cnic         String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  city     City?     @relation(fields: [cityId], references: [id])
+  bookings Booking[]
+
+  @@map("customers")
+}
+
+// ============================================
+// CN ALLOCATION
+// ============================================
+
+model CnAllocation {
+  id              String             @id @default(uuid())
+  productId       String             @map("product_id")
+  stationId       String             @map("station_id")
+  startCnNumber   String             @map("start_cn_number")
+  endCnNumber     String             @map("end_cn_number")
+  currentCnNumber String?            @map("current_cn_number")
+  status          CnAllocationStatus @default(ACTIVE)
+  allocatedBy     String             @map("allocated_by")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  product         Product   @relation(fields: [productId], references: [id])
+  station         Station   @relation(fields: [stationId], references: [id])
+  allocatedByUser User      @relation("CnAllocatedBy", fields: [allocatedBy], references: [id])
+  bookings        Booking[]
+
+  @@unique([productId, stationId, startCnNumber])
+  @@map("cn_allocations")
+}
+
+enum CnAllocationStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
+
+// ============================================
+// BATCHES
+// ============================================
+
+model Batch {
+  id          String      @id @default(uuid())
+  batchCode   String      @unique @map("batch_code")
+  batchDate   DateTime    @map("batch_date")
+  stationId   String?     @map("station_id")
+  routeId     String?     @map("route_id")
+  staffId     String?     @map("staff_id")
+  stationCode String?     @map("station_code")
+  routeCode   String?     @map("route_code")
+  staffCode   String?     @map("staff_code")
+  status      BatchStatus @default(ACTIVE)
+  closedAt    DateTime?   @map("closed_at")
+  closedBy    String?     @map("closed_by")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  station      Station?     @relation(fields: [stationId], references: [id])
+  route        Route?       @relation(fields: [routeId], references: [id])
+  staff        User?        @relation("BatchStaff", fields: [staffId], references: [id])
+  closedByUser User?        @relation("BatchClosedBy", fields: [closedBy], references: [id])
+  shiftCloses  ShiftClose[]
+  bookings     Booking[]
+
+  @@index([status])
+  @@index([batchDate])
+  @@map("batches")
+}
+
+enum BatchStatus {
+  ACTIVE
+  CLOSED
+}
+
+// ============================================
+// OPERATIONS - MANIFESTS
+// ============================================
+
+model Manifest {
+  id                 String         @id @default(uuid())
+  manifestCode       String         @unique @map("manifest_code")
+  manifestDate       DateTime       @map("manifest_date")
+  manifestSealNo     String?        @map("manifest_seal_no")
+  teller             String?        @map("teller")
+  stationId          String?        @map("station_id")
+  vehicleId          String?        @map("vehicle_id")
+  vehicleNo          String?        @map("vehicle_no")
+  vehicleSize        String?        @map("vehicle_size")
+  vehicleVendor      String?        @map("vehicle_vendor")
+  driverId           String?        @map("driver_id")
+  driverName         String?        @map("driver_name")
+  staffDriverPhone   String?        @map("staff_driver_phone")
+  routeId            String?        @map("route_id")
+  route              String?        @map("route")
+  totalCns           Int            @default(0) @map("total_cns")
+  status             ManifestStatus @default(PENDING)
+  createdBy          String         @map("created_by")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  completedAt        DateTime?      @map("completed_at")
+
+  // Relations
+  station           Station?           @relation(fields: [stationId], references: [id])
+  vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
+  driver            Driver?            @relation(fields: [driverId], references: [id])
+  routeRelation     Route?             @relation(fields: [routeId], references: [id])
+  createdByUser     User               @relation(fields: [createdBy], references: [id])
+  manifestShipments ManifestShipment[]
+  bookings          Booking[]
+
+  @@index([status])
+  @@index([manifestDate])
+  @@map("manifests")
+}
+
+enum ManifestStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+model ManifestShipment {
+  id         String   @id @default(uuid())
+  manifestId String   @map("manifest_id")
+  bookingId  String   @map("booking_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  manifest Manifest @relation(fields: [manifestId], references: [id], onDelete: Cascade)
+  booking  Booking  @relation(fields: [bookingId], references: [id])
+
+  @@index([manifestId])
+  @@index([bookingId])
+  @@map("manifest_shipments")
+}
+
+// ============================================
+// OPERATIONS - ARRIVAL SCANS
+// ============================================
+
+model ArrivalScan {
+  id          String            @id @default(uuid())
+  arrivalCode String            @unique @map("arrival_code")
+  scanDate    DateTime          @map("scan_date")
+  stationId   String?           @map("station_id")
+  riderId     String?           @map("rider_id")
+  riderName   String?           @map("rider_name")
+  totalCns    Int               @default(0) @map("total_cns")
+  status      ArrivalScanStatus @default(PENDING)
+  scannedBy   String            @map("scanned_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  completedAt DateTime?         @map("completed_at")
+
+  // Relations
+  station              Station?              @relation(fields: [stationId], references: [id])
+  rider                Driver?               @relation(fields: [riderId], references: [id])
+  scannedByUser        User                  @relation(fields: [scannedBy], references: [id])
+  arrivalScanShipments ArrivalScanShipment[]
+
+  @@index([status])
+  @@index([scanDate])
+  @@map("arrival_scans")
+}
+
+enum ArrivalScanStatus {
+  PENDING
+  COMPLETE
+}
+
+model ArrivalScanShipment {
+  id            String   @id @default(uuid())
+  arrivalScanId String   @map("arrival_scan_id")
+  bookingId     String   @map("booking_id")
+  scannedAt     DateTime @default(now()) @map("scanned_at")
+
+  // Relations
+  arrivalScan ArrivalScan @relation(fields: [arrivalScanId], references: [id], onDelete: Cascade)
+  booking     Booking     @relation(fields: [bookingId], references: [id])
+
+  @@index([arrivalScanId])
+  @@index([bookingId])
+  @@map("arrival_scan_shipments")
+}
+
+// ============================================
+// OPERATIONS - DELIVERY
+// ============================================
+
+model DeliverySheet {
+  id              String              @id @default(uuid())
+  sheetNumber     String              @unique @map("sheet_number")
+  sheetDate       DateTime            @map("sheet_date")
+  riderId         String?             @map("rider_id")
+  riderName       String?             @map("rider_name")
+  riderMobile     String?             @map("rider_mobile")
+  vehicleId       String?             @map("vehicle_id")
+  vehicleNo       String?             @map("vehicle_no")
+  vehicleSize     String?             @map("vehicle_size")
+  vehicleVendor   String?             @map("vehicle_vendor")
+  routeId         String?             @map("route_id")
+  originStationId String?             @map("origin_station_id")
+  totalCns        Int                 @default(0) @map("total_cns")
+  totalWeight     Decimal             @default(0) @map("total_weight") @db.Decimal(10, 2)
+  totalFod        Decimal             @default(0) @map("total_fod") @db.Decimal(10, 2)
+  status          DeliverySheetStatus @default(PENDING)
+  phase           DeliveryPhase       @default(PHASE1)
+  createdBy       String              @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  completedAt     DateTime?           @map("completed_at")
+
+  // Relations
+  rider                  Driver?                 @relation(fields: [riderId], references: [id])
+  vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id])
+  route                  Route?                  @relation(fields: [routeId], references: [id])
+  originStation          Station?                @relation(fields: [originStationId], references: [id])
+  createdByUser          User                    @relation(fields: [createdBy], references: [id])
+  deliverySheetShipments DeliverySheetShipment[]
+  collections            Collection[]
+  bookings               Booking[]
+
+  @@index([status])
+  @@index([sheetDate])
+  @@map("delivery_sheets")
+}
+
+enum DeliverySheetStatus {
+  PENDING
+  COMPLETED
+}
+
+enum DeliveryPhase {
+  PHASE1
+  PHASE2
+}
+
+model DeliverySheetShipment {
+  id              String         @id @default(uuid())
+  deliverySheetId String         @map("delivery_sheet_id")
+  bookingId       String?        @map("booking_id")
+  deliveryStatus  DeliveryStatus @default(PENDING) @map("delivery_status")
+  deliveredAt     DateTime?      @map("delivered_at")
+  deliveryRemarks String?        @map("delivery_remarks")
+
+  // Relations
+  deliverySheet DeliverySheet @relation(fields: [deliverySheetId], references: [id], onDelete: Cascade)
+  booking       Booking?      @relation(fields: [bookingId], references: [id])
+
+  @@index([deliverySheetId])
+  @@index([bookingId])
+  @@map("delivery_sheet_shipments")
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  NOT_DELIVERED
+}
+
+// ============================================
+// VEHICLES & DRIVERS
+// ============================================
+
+model Vehicle {
+  id            String   @id @default(uuid())
+  vehicleNumber String   @unique @map("vehicle_number")
+  vehicleSize   String   @map("vehicle_size")
+  vehicleVendor String?  @map("vehicle_vendor")
+  status        String   @default("active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  manifests      Manifest[]
+  deliverySheets DeliverySheet[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id            String   @id @default(uuid())
+  driverCode    String   @unique @map("driver_code")
+  name          String
+  phone         String
+  licenseNumber String?  @map("license_number")
+  status        String   @default("active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  manifests      Manifest[]
+  arrivalScans   ArrivalScan[]
+  deliverySheets DeliverySheet[]
+  pickupRequests PickupRequest[]
+
+  @@map("drivers")
+}
+
+// ============================================
+// COLLECTIONS
+// ============================================
+
+model Collection {
+  id                String   @id @default(uuid())
+  deliverySheetId   String?  @map("delivery_sheet_id")
+  collectionAmount  Decimal  @map("collection_amount") @db.Decimal(10, 2)
+  collectionDate    DateTime @map("collection_date")
+  collectionRemarks String?  @map("collection_remarks")
+  collectedBy       String   @map("collected_by")
+  paymentMethod     String?  @map("payment_method")
+  receiptNumber     String?  @unique @map("receipt_number")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  deliverySheet   DeliverySheet? @relation(fields: [deliverySheetId], references: [id])
+  collectedByUser User           @relation(fields: [collectedBy], references: [id])
+
+  @@index([collectionDate])
+  @@map("collections")
+}
+
+// ============================================
+// PRICING
+// ============================================
+
+model PricingRule {
+  id                String    @id @default(uuid())
+  originCityId      String    @map("origin_city_id")
+  destinationCityId String    @map("destination_city_id")
+  serviceId         String    @map("service_id")
+  weightFrom        Decimal   @map("weight_from") @db.Decimal(10, 2)
+  weightTo          Decimal   @map("weight_to") @db.Decimal(10, 2)
+  ratePerKg         Decimal   @map("rate_per_kg") @db.Decimal(10, 2)
+  baseRate          Decimal   @map("base_rate") @db.Decimal(10, 2)
+  additionalCharges Decimal?  @map("additional_charges") @db.Decimal(10, 2)
+  status            String    @default("active")
+  effectiveFrom     DateTime  @map("effective_from")
+  effectiveTo       DateTime? @map("effective_to")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  originCity      City    @relation("OriginPricing", fields: [originCityId], references: [id])
+  destinationCity City    @relation("DestinationPricing", fields: [destinationCityId], references: [id])
+  service         Service @relation(fields: [serviceId], references: [id])
+
+  @@index([originCityId, destinationCityId, serviceId])
+  @@map("pricing_rules")
+}
+
+// ============================================
+// CONFIGURATION
+// ============================================
+
+model Configuration {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id") // Owner of this configuration
+  routeCode         String?  @map("route_code")
+  staffCode         String?  @map("staff_code")
+  routeName         String?  @map("route_name")
+  stationId         String?  @map("station_id")
+  stationCode       String?  @map("station_code")
+  printerConnection String?  @map("printer_connection")
+  updatedBy         String   @map("updated_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserConfiguration", fields: [userId], references: [id])
+  station       Station? @relation(fields: [stationId], references: [id])
+  updatedByUser User     @relation(fields: [updatedBy], references: [id])
+
+  @@unique([userId]) // Each user can have only one configuration
+  @@map("configurations")
+}
+
+// ============================================
+// VOID RECORDS
+// ============================================
+
+model VoidRecord {
+  id         String   @id @default(uuid())
+  cnNumber   String   @map("cn_number")
+  voidReason String   @map("void_reason")
+  voidedBy   String   @map("voided_by")
+  voidedAt   DateTime @default(now()) @map("voided_at")
+
+  // Relations
+  voidedByUser User @relation(fields: [voidedBy], references: [id])
+
+  @@map("void_records")
+}
+
+// ============================================
+// SHIFT CLOSES
+// ============================================
+
+model ShiftClose {
+  id        String   @id @default(uuid())
+  shiftDate DateTime @map("shift_date")
+  batchId   String   @map("batch_id")
+  closedBy  String   @map("closed_by")
+  closedAt  DateTime @default(now()) @map("closed_at")
+
+  // Relations
+  batch        Batch @relation(fields: [batchId], references: [id])
+  closedByUser User  @relation(fields: [closedBy], references: [id])
+
+  @@map("shift_closes")
+}
+
+// ============================================
+// BOOKINGS
+// ============================================
+
+model Booking {
+  id                String   @id @default(uuid())
+  cnNumber          String?  @unique @map("cn_number")
+  bookingDate       DateTime @map("booking_date")
+  customerId        String   @map("customer_id")
+  originCityId      String   @map("origin_city_id")
+  destinationCityId String   @map("destination_city_id")
+  serviceId         String   @map("service_id")
+  productId         String?  @map("product_id")
+
+  // Consignee Information
+  consigneeName        String  @map("consignee_name")
+  consigneePhone       String  @map("consignee_phone")
+  consigneeEmail       String? @map("consignee_email")
+  consigneeAddress     String  @map("consignee_address")
+  consigneeAddress2    String? @map("consignee_address2")
+  consigneeLandline    String? @map("consignee_landline")
+  consigneeZipCode     String? @map("consignee_zip_code")
+  consigneeCompanyName String? @map("consignee_company_name")
+
+  // Shipper Information (stored in booking for reference)
+  shipperName        String? @map("shipper_name")
+  shipperPhone       String? @map("shipper_phone")
+  shipperEmail       String? @map("shipper_email")
+  shipperAddress     String? @map("shipper_address")
+  shipperAddress2    String? @map("shipper_address2")
+  shipperLandline    String? @map("shipper_landline")
+  shipperCompanyName String? @map("shipper_company_name")
+  shipperCnic        String? @map("shipper_cnic")
+
+  // Shipment Details
+  weight               Decimal  @db.Decimal(10, 2)
+  pieces               Int
+  chargeableWeight     Decimal  @map("chargeable_weight") @db.Decimal(10, 2)
+  volumetricWeight     Decimal? @map("volumetric_weight") @db.Decimal(10, 2)
+  declaredValue        Decimal? @map("declared_value") @db.Decimal(10, 2)
+  packetContent        String?  @map("packet_content")
+  handlingInstructions String?  @map("handling_instructions")
+
+  // Payment & Pricing
+  paymentMode PaymentMode @map("payment_mode")
+  codAmount   Decimal?    @map("cod_amount") @db.Decimal(10, 2)
+  rate        Decimal     @db.Decimal(10, 2)
+  otherAmount Decimal?    @map("other_amount") @db.Decimal(10, 2)
+  totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
+
+  // Document URLs (stored as JSON array of Cloudinary URLs)
+  documentUrls String? @map("document_urls") // JSON array of document URLs
+
+  // Document Details (stored as JSON)
+  documentDetails String? @map("document_details") // JSON: { serviceType: string, documents: [{ name: string, price: number, url: string }] }
+
+  // Status & Tracking
+  status          BookingStatus @default(BOOKED)
+  batchId         String?       @map("batch_id")
+  batchCode       String?       @map("batch_code")
+  manifestId      String?       @map("manifest_id")
+  deliverySheetId String?       @map("delivery_sheet_id")
+  cnAllocationId  String?       @map("cn_allocation_id")
+
+  // Additional Fields
+  dcReferenceNo String? @map("dc_reference_no")
+  manualCn      String? @map("manual_cn")
+  cancelReason  String? @map("cancel_reason")
+
+  // Metadata
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deliveredAt DateTime? @map("delivered_at")
+
+  // Relations
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  originCity      City             @relation("OriginBooking", fields: [originCityId], references: [id])
+  destinationCity City             @relation("DestinationBooking", fields: [destinationCityId], references: [id])
+  service         Service          @relation(fields: [serviceId], references: [id])
+  product         Product?         @relation(fields: [productId], references: [id])
+  batch           Batch?           @relation(fields: [batchId], references: [id])
+  manifest        Manifest?        @relation(fields: [manifestId], references: [id])
+  deliverySheet   DeliverySheet?   @relation(fields: [deliverySheetId], references: [id])
+  cnAllocation    CnAllocation?    @relation(fields: [cnAllocationId], references: [id])
+  createdByUser   User             @relation("BookingCreatedBy", fields: [createdBy], references: [id])
+  bookingHistory  BookingHistory[]
+  arrivalScanShipments ArrivalScanShipment[]
+  manifestShipments ManifestShipment[]
+  deliverySheetShipments DeliverySheetShipment[]
+  pickupRequests  PickupRequest[]
+
+  @@index([cnNumber])
+  @@index([status])
+  @@index([bookingDate])
+  @@index([customerId])
+  @@map("bookings")
+}
+
+model PickupRequest {
+  id                  String       @id @default(uuid())
+  bookingId           String       @map("booking_id")
+  pickupAddress       String       @map("pickup_address")
+  pickupDate          DateTime     @map("pickup_date")
+  pickupTime          String?      @map("pickup_time")
+  contactName         String       @map("contact_name")
+  contactPhone        String       @map("contact_phone")
+  specialInstructions String?      @map("special_instructions")
+  status              PickupStatus @default(REQUESTED)
+  assignedRiderId     String?      @map("assigned_rider_id")
+  
+  createdBy           String       @map("created_by")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  assignedRider Driver?  @relation(fields: [assignedRiderId], references: [id])
+  createdByUser User     @relation("PickupCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("pickup_requests")
+}
+
+enum PickupStatus {
+  REQUESTED
+  ASSIGNED
+  PICKED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  BOOKED
+  PICKUP_REQUESTED
+  AT_HUB
+  IN_TRANSIT
+  AT_DEPOT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  RETURNED
+  VOIDED
+}
+
+enum PaymentMode {
+  CASH
+  COD
+  ONLINE
+}
+
+model BookingHistory {
+  id          String         @id @default(uuid())
+  bookingId   String         @map("booking_id")
+  action      String
+  oldStatus   BookingStatus? @map("old_status")
+  newStatus   BookingStatus? @map("new_status")
+  performedBy String         @map("performed_by")
+  remarks     String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  booking         Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  performedByUser User    @relation("BookingHistoryPerformedBy", fields: [performedBy], references: [id])
+
+  @@index([bookingId])
+  @@index([createdAt])
+  @@index([performedBy])
+  @@map("booking_history")
+}
