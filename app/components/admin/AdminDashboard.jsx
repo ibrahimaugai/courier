@@ -53,9 +53,6 @@ export default function AdminDashboard() {
       {/* Header Section */}
       <div className="mb-8 flex justify-between items-end">
         <div>
-          <div className="flex items-center gap-4 mb-4">
-            <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-          </div>
           <h1 className="text-3xl font-black bg-gradient-to-r from-sky-600 to-cyan-600 bg-clip-text text-transparent mb-1">
             Welcome, {user?.username}
           </h1>

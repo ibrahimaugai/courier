@@ -51,9 +51,6 @@ export default function RmsToday() {
       {/* Header Section */}
       <div className="mb-8 flex justify-between items-start">
         <div>
-          <div className="flex items-center gap-4 mb-4">
-            <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-          </div>
           <h1 className="text-3xl font-bold text-gray-900">RMS Today</h1>
           <p className="text-sm text-gray-500 mt-1 italic tracking-tight uppercase font-medium">Record Management System</p>
         </div>

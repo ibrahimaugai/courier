@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://76.13.4.55:5000/api/v1'
+const API_BASE_URL = 'http://localhost:5000/api/v1'
 
 /**
  * API utility functions
@@ -782,6 +782,62 @@ export const api = {
   async cancelPickupRequest(pickupId) {
     const response = await this.request(`/pickups/${pickupId}/cancel`, {
       method: 'POST',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Get all pricing rules
+   * @param {object} params - Query parameters (originCityId, destinationCityId)
+   * @returns {Promise<object>} - Pricing rules list
+   */
+  async getPricingRules(params = {}) {
+    const queryParams = new URLSearchParams()
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        queryParams.append(key, params[key])
+      }
+    })
+    const queryString = queryParams.toString()
+    const endpoint = `/pricing/rules${queryString ? `?${queryString}` : ''}`
+    const response = await this.request(endpoint, {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Get all cities
+   * @returns {Promise<object>} - Cities list
+   */
+  async getCities() {
+    const response = await this.request('/pricing/cities', {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Get all services
+   * @returns {Promise<object>} - Services list
+   */
+  async getServices() {
+    const response = await this.request('/pricing/services', {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Update a pricing rule
+   * @param {string} id - Rule ID
+   * @param {object} data - Update data (baseRate, ratePerKg, etc.)
+   * @returns {Promise<object>} - Updated rule
+   */
+  async updatePricingRule(id, data) {
+    const response = await this.request(`/pricing/rules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     })
     return this.handleResponse(response)
   },

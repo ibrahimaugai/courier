@@ -755,6 +755,69 @@ export const addCustomer = createAsyncThunk(
 
 export const { clearError: clearCustomersError } = customersSlice.actions
 
+// Pricing Slice
+const pricingSlice = createSlice({
+  name: 'pricing',
+  initialState: {
+    rules: [],
+    cities: [],
+    services: [],
+    isLoading: false,
+    isLoaded: false,
+    error: null,
+  },
+  reducers: {
+    clearPricingError: (state) => {
+      state.error = null
+    },
+    resetPricing: (state) => {
+      state.isLoaded = false
+    }
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchAllPricing.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(fetchAllPricing.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.isLoaded = true
+        state.rules = action.payload.rules
+        state.cities = action.payload.cities
+        state.services = action.payload.services
+        state.error = null
+      })
+      .addCase(fetchAllPricing.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload || action.error.message
+      })
+  }
+})
+
+export const fetchAllPricing = createAsyncThunk(
+  'pricing/fetchAll',
+  async (_, { rejectWithValue }) => {
+    try {
+      const [rulesResponse, citiesResponse, servicesResponse] = await Promise.all([
+        api.getPricingRules(),
+        api.getCities(),
+        api.getServices(),
+      ])
+
+      return {
+        rules: Array.isArray(rulesResponse) ? rulesResponse : (rulesResponse?.data || []),
+        cities: Array.isArray(citiesResponse) ? citiesResponse : (citiesResponse?.data || []),
+        services: Array.isArray(servicesResponse) ? servicesResponse : (servicesResponse?.data || []),
+      }
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
+export const { clearPricingError, resetPricing } = pricingSlice.actions
+
 // Store Configuration
 export const store = configureStore({
   reducer: {
@@ -763,6 +826,7 @@ export const store = configureStore({
     tracking: trackingSlice.reducer,
     pickups: pickupSlice.reducer,
     customers: customersSlice.reducer,
+    pricing: pricingSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

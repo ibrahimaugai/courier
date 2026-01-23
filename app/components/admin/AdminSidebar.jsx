@@ -16,7 +16,9 @@ import {
   XCircle,
   Settings,
   Package,
-  FileText
+  FileText,
+  DollarSign,
+  Edit
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
@@ -40,6 +42,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
     { name: 'Booking Requests', icon: FileText, shortcut: 'REQ' },
     { name: 'CN Allocation', icon: FileText, shortcut: 'ALC' },
     { name: 'CN Reprint', icon: Printer, shortcut: 'RPT' },
+    { name: 'Edit Booking', icon: Edit, shortcut: 'EDT' },
     { name: 'CN Void', icon: XCircle, shortcut: 'VOID' },
   ]
 
@@ -59,7 +62,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
     { name: 'Shift Close', icon: RefreshCw },
     { name: 'Configuration', icon: Settings },
     { name: 'RMS Today', icon: BarChart },
-    { name: 'Rate Calculator', icon: Calculator },
+    { name: 'Pricing Rates', icon: DollarSign },
   ]
 
   const isBookingsActive = bookingsSubItems.some(item => activePage === item.name)
@@ -83,11 +86,15 @@ export default function AdminSidebar({ activePage, setActivePage }) {
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen fixed left-0 top-0 shadow-sm">
       {/* Sidebar Header */}
-      <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-sky-600 to-cyan-600">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-white">Admin Panel</h2>
-            <p className="text-xs text-sky-100 mt-1">Operations</p>
+      <div className="p-6 border-b border-gray-200 bg-white">
+        <div className="flex flex-col items-center justify-center">
+          <img
+            src="/nps-logo.png"
+            alt="NPS Logo"
+            className="h-16 w-auto object-contain"
+          />
+          <div className="mt-2 text-center">
+            <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">Admin Control</span>
           </div>
         </div>
       </div>
@@ -183,8 +190,8 @@ export default function AdminSidebar({ activePage, setActivePage }) {
 
         {/* Other Menu Items */}
         {menuItems.map((item, index) => {
-          // Hide Employee Registration for non-SUPER_ADMIN users
-          if (item.name === 'Employee Registration' && user?.role !== 'SUPER_ADMIN') {
+          // Hide Employee Registration and Pricing Rates for non-SUPER_ADMIN users
+          if ((item.name === 'Employee Registration' || item.name === 'Pricing Rates') && user?.role !== 'SUPER_ADMIN') {
             return null
           }
 

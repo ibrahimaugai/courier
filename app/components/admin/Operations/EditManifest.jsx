@@ -184,7 +184,7 @@ export default function EditManifest({ setActivePage, manifestId }) {
         <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 animate-fade-in">
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                    <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
+
                     <div className="h-8 w-[2px] bg-gray-200"></div>
                     <div>
                         <h2 className="text-sm font-black text-sky-600 uppercase tracking-widest">Operations</h2>

@@ -26,6 +26,9 @@ export default function BookingConsignment() {
   const [showNationalBureauModal, setShowNationalBureauModal] = useState(false)
   const [selectedNationalBureauDocuments, setSelectedNationalBureauDocuments] = useState([])
   const [cnAllocationError, setCnAllocationError] = useState('')
+  const dispatch = useDispatch()
+  const { user } = useSelector((state) => state.auth)
+  const { cities, rules: reduxRules } = useSelector((state) => state.pricing)
 
   const [formData, setFormData] = useState({
     product: '',
@@ -103,21 +106,68 @@ export default function BookingConsignment() {
     }
   }, [formData.product])
 
-  // Calculate total amount when relevant fields change
+  // Calculate rate and total amount when relevant fields change
   useEffect(() => {
-    const { documents, documentServiceType } = getSelectedDocuments()
+    const calculateRate = () => {
+      if (!formData.originCity || !formData.destination || !formData.services || !formData.product) {
+        return 0
+      }
+
+      // Calculate applicable weight (max of physical and volumetric)
+      const physicalWeight = parseFloat(formData.weight || '0')
+      const volumetricWeight = parseFloat(formData.volumetricWeight || '0')
+      const applicableWeight = Math.max(physicalWeight, volumetricWeight)
+
+      if (applicableWeight <= 0) return 0
+
+      // Find matching rule from Redux state
+      // Note: formData.originCity and formData.destination are IDs from the dropdown
+      // formData.services is the serviceName (e.g. "Over Night")
+      const matchingRule = reduxRules.find(rule =>
+        rule.originCityId === formData.originCity &&
+        rule.destinationCityId === formData.destination &&
+        rule.service?.serviceName === formData.services &&
+        applicableWeight >= rule.weightFrom &&
+        applicableWeight < rule.weightTo
+      )
+
+      if (matchingRule) {
+        return matchingRule.baseRate
+      }
+
+      // Fallback if no specific rule is found
+      return 0
+    }
+
+    const calculatedRate = calculateRate()
+    const pieces = parseInt(formData.pieces || '1')
+    const { documents } = getSelectedDocuments()
     const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
     const otherAmount = parseFloat(formData.otherAmount || '0')
-    const rate = parseFloat(formData.rate || '0')
-    const totalAmount = rate + documentTotal + otherAmount
+    const totalAmount = ((calculatedRate || 0) * pieces) + documentTotal + otherAmount
 
     setFormData(prev => ({
       ...prev,
+      rate: calculatedRate.toString(),
       totalAmount: totalAmount
     }))
-  }, [formData.rate, formData.otherAmount, selectedDocuments, selectedApostilleDocuments,
-    selectedUaeEmbassyDocuments, selectedBoardVerificationDocuments, selectedHecDocuments,
-    selectedIbccDocuments, selectedNationalBureauDocuments])
+  }, [
+    formData.originCity,
+    formData.destination,
+    formData.services,
+    formData.weight,
+    formData.volumetricWeight,
+    formData.pieces,
+    formData.otherAmount,
+    reduxRules,
+    selectedDocuments,
+    selectedApostilleDocuments,
+    selectedUaeEmbassyDocuments,
+    selectedBoardVerificationDocuments,
+    selectedHecDocuments,
+    selectedIbccDocuments,
+    selectedNationalBureauDocuments
+  ])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -454,20 +504,11 @@ export default function BookingConsignment() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
   const [documentFiles, setDocumentFiles] = useState([])
-  const dispatch = useDispatch()
-  const { user } = useSelector((state) => state.auth)
 
-  // Set default origin city on mount (for admin, can be from station or default)
+  // No longer needed as we have a dropdown with database values
   useEffect(() => {
-    // For admin: default to Karachi or get from user's station
-    // For user: get from their city
-    if (!formData.originCity) {
-      setFormData(prev => ({
-        ...prev,
-        originCity: 'KHI - Karachi' // Default origin city
-      }))
-    }
-  }, [])
+    // Optional: Set a default city if needed once cities are loaded
+  }, [cities])
 
   // Get selected documents with their details
   const getSelectedDocuments = () => {
@@ -550,13 +591,16 @@ export default function BookingConsignment() {
       // Get selected documents
       const { documents, documentServiceType } = getSelectedDocuments()
 
-      // Calculate total amount including document prices
+      const pieces = parseInt(formData.pieces || '1')
       const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
       const otherAmount = parseFloat(formData.otherAmount || '0')
-      // Rate should be calculated based on weight, destination, service - for now use a placeholder
-      // TODO: Integrate with rate calculator API
-      const baseRate = parseFloat(formData.rate || '0') || 1000 // Default rate if not provided
-      const totalAmount = baseRate + documentTotal + otherAmount
+      const baseRate = parseFloat(formData.rate || '0')
+
+      // Calculate final total correctly: (Rate * Pieces) + Documents + Others
+      const totalAmount = (baseRate * pieces) + documentTotal + otherAmount
+
+      // Determine chargeable weight
+      const chargeableWeight = Math.max(parseFloat(formData.weight || '0'), parseFloat(formData.volumetricWeight || '0'))
 
       // Map form data to API format
       const bookingData = {
@@ -564,8 +608,7 @@ export default function BookingConsignment() {
         productId: formData.product, // e.g., "General"
         serviceId: formData.services, // e.g., "ATS - Doc MOFA Attestation"
         destinationCityId: formData.destination, // e.g., "LHE - Lahore"
-        // Origin city - for admin: from form or default, for user: from their location
-        originCityId: formData.originCity || 'KHI - Karachi', // Default origin city
+        originCityId: formData.originCity,
 
         // CN Number (optional - will be auto-generated)
         cnNumber: formData.cnNumber || undefined,
@@ -577,6 +620,7 @@ export default function BookingConsignment() {
         payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
         volumetricWeight: parseFloat(formData.volumetricWeight || '0') || undefined,
         weight: parseFloat(formData.weight),
+        chargeableWeight: chargeableWeight,
 
         // Shipper Information
         mobileNumber: formData.mobileNumber,
@@ -640,7 +684,7 @@ export default function BookingConsignment() {
         setFormData({
           product: '', // Resetting product will clear CN error and input
           destination: '',
-          originCity: 'KHI - Karachi',
+          originCity: '',
           cnNumber: '',
           pieces: '1',
           handlingInstructions: '',
@@ -695,9 +739,6 @@ export default function BookingConsignment() {
     <div className="max-w-7xl w-full">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Booking (Consignment)</h1>
           <div className="flex items-center gap-4">
@@ -727,6 +768,7 @@ export default function BookingConsignment() {
         onOpenDocumentModal={handleOpenDocumentModal}
         onFileChange={handleFileChange}
         cnAllocationError={cnAllocationError}
+        cities={cities}
       />
 
       {/* Shipper Section */}

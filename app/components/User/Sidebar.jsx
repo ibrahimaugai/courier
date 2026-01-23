@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch } from 'react-redux'
-import { 
-  Package as PackageIcon, 
+import {
+  Package as PackageIcon,
   LogOut,
   Truck,
   Search,
@@ -55,21 +55,28 @@ export default function Sidebar({ activePage, setActivePage }) {
         lg:translate-x-0
       `}>
         {/* Sidebar Header */}
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-sky-600 to-cyan-600">
-          <h2 className="text-lg font-bold text-white">Courier RMS</h2>
-          <p className="text-xs text-sky-100 mt-1">Management System</p>
+        <div className="p-6 border-b border-gray-200 bg-white">
+          <div className="flex flex-col items-center justify-center">
+            <img
+              src="/nps-logo.png"
+              alt="NPS Logo"
+              className="h-16 w-auto object-contain"
+            />
+            <div className="mt-2 text-center">
+              <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">User Panel</span>
+            </div>
+          </div>
         </div>
-        
+
         {/* Navigation Menu */}
         <nav className="flex-1 py-4 overflow-y-auto">
           {/* My Shipments */}
-          <div 
+          <div
             onClick={() => handleMenuClick('My Shipments')}
-            className={`flex items-center px-4 py-3 cursor-pointer transition-all duration-200 ${
-              activePage === 'My Shipments' || activePage === 'Home'
-                ? 'bg-sky-600 text-white shadow-md border-l-4 border-sky-400' 
+            className={`flex items-center px-4 py-3 cursor-pointer transition-all duration-200 ${activePage === 'My Shipments' || activePage === 'Home'
+                ? 'bg-sky-600 text-white shadow-md border-l-4 border-sky-400'
                 : 'text-gray-700 hover:bg-sky-50'
-            }`}
+              }`}
           >
             <PackageIcon className="mr-3 w-5 h-5" />
             <span className="text-sm font-medium">My Shipments</span>
@@ -79,14 +86,13 @@ export default function Sidebar({ activePage, setActivePage }) {
           {menuItems.map((item, index) => {
             const IconComponent = item.icon
             return (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 onClick={() => handleMenuClick(item.name)}
-                className={`flex items-center px-4 py-3 cursor-pointer transition-all duration-200 ${
-                  activePage === item.name
-                    ? 'bg-sky-600 text-white shadow-md border-l-4 border-sky-400' 
+                className={`flex items-center px-4 py-3 cursor-pointer transition-all duration-200 ${activePage === item.name
+                    ? 'bg-sky-600 text-white shadow-md border-l-4 border-sky-400'
                     : 'text-gray-700 hover:bg-sky-50'
-                }`}
+                  }`}
               >
                 <IconComponent className="mr-3 w-5 h-5" />
                 <span className="text-sm font-medium">{item.name}</span>
@@ -94,10 +100,10 @@ export default function Sidebar({ activePage, setActivePage }) {
             )
           })}
         </nav>
-        
+
         {/* Logout Button */}
         <div className="p-4 border-t border-gray-200">
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full py-2.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium shadow-md"
           >

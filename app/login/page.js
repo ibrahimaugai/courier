@@ -11,7 +11,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const dispatch = useDispatch()
   const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth)
-  
+
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -52,20 +52,20 @@ export default function LoginPage() {
     e.preventDefault()
     setSuccess('')
     dispatch(clearError())
-    
+
     try {
       const result = await dispatch(loginUser({
         username: formData.username,
         password: formData.password
       }))
-      
+
       if (loginUser.fulfilled.match(result)) {
         // Wait a bit longer to ensure Redux state and localStorage are fully synced
         // Also verify token is actually stored before redirecting
         setTimeout(() => {
           const token = localStorage.getItem('token')
           const userData = JSON.parse(localStorage.getItem('user') || '{}')
-          
+
           if (token) {
             // Redirect based on user role
             if (userData.role === 'ADMIN' || userData.role === 'SUPER_ADMIN') {
@@ -89,17 +89,28 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo/Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-600 to-cyan-600 rounded-2xl shadow-lg mb-4">
-            <LogIn className="w-8 h-8 text-white" />
+        {/* Login Form Card */}
+        <div className="bg-white rounded-3xl shadow-2xl p-8 border border-white/20 backdrop-blur-sm">
+          {/* Logo/Header Inside Card */}
+          <div className="text-center mb-10">
+            <div className="flex justify-center">
+              <div className="relative group">
+                <div className="absolute -inset-1 "></div>
+                <div className="relative ">
+                  <img
+                    src="/nps-logo.png"
+                    alt="NPS Logo"
+                    className="h-36 w-36 object-contain "
+                  />
+                </div>
+              </div>
+            </div>
+            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2 bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-cyan-700">
+              Welcome Back
+            </h1>
+            <p className="text-gray-600 font-medium">Elevating Logistic Excellence</p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your Courier RMS account</p>
-        </div>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           {success && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
+import { api } from '../lib/api'
+import { fetchAllPricing } from '../lib/store'
 import AdminProtectedRoute from '../components/AdminProtectedRoute'
 import AdminSidebar from '../components/admin/AdminSidebar'
 import AdminDashboard from '../components/admin/AdminDashboard'
@@ -24,16 +26,19 @@ import ShipmentTracking from '../components/admin/Operations/ShipmentTracking'
 import CnReprint from '../components/admin/CnReprint'
 import BatchCutOff from '../components/admin/BatchCutOff'
 import RmsToday from '../components/admin/RmsToday'
-import RateCalculator from '../components/admin/RateCalculater'
 import ShiftClose from '../components/admin/ShiftClose'
 import CnVoid from '../components/admin/CnVoid'
 import Configuration from '../components/admin/Configration'
 import CnAllocation from '../components/admin/CnAllocation'
 import EmployeeRegistration from '../components/admin/EmployeeRegistration'
 import BookingRequests from '../components/admin/bookings/BookingRequests'
+import PricingRates from '../components/admin/PricingRates'
+import EditBooking from '../components/admin/bookings/EditBooking'
 
 export default function AdminPanel() {
+  const dispatch = useDispatch()
   const { batchInfo } = useSelector((state) => state.auth)
+  const { isLoaded: pricingLoaded } = useSelector((state) => state.pricing)
   const [activePage, setActivePage] = useState('Configuration')
   const [scanId, setScanId] = useState(null)
 
@@ -43,6 +48,13 @@ export default function AdminPanel() {
       setActivePage('Configuration')
     }
   }, [batchInfo, activePage])
+
+  // Pre-fetch pricing data on admin panel load
+  useEffect(() => {
+    if (!pricingLoaded) {
+      dispatch(fetchAllPricing())
+    }
+  }, [dispatch, pricingLoaded])
 
   const handleSetActivePage = (page, id = null) => {
     // Prevent navigating away if config is missing
@@ -93,8 +105,6 @@ export default function AdminPanel() {
         return <BatchCutOff />
       case 'RMS Today':
         return <RmsToday />
-      case 'Rate Calculator':
-        return <RateCalculator />
       case 'Shift Close':
         return <ShiftClose />
       case 'CN Void':
@@ -105,8 +115,12 @@ export default function AdminPanel() {
         return <CnAllocation />
       case 'Booking Requests':
         return <BookingRequests />
+      case 'Edit Booking':
+        return <EditBooking />
       case 'Employee Registration':
         return <EmployeeRegistration />
+      case 'Pricing Rates':
+        return <PricingRates />
       case 'Admin Home':
       default:
         return <AdminDashboard />

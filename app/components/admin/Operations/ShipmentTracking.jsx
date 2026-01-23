@@ -26,7 +26,7 @@ export default function ShipmentTracking() {
 
   const handleTrack = async (e) => {
     e?.preventDefault()
-    
+
     if (!cnNumber.trim()) {
       setError('Please enter a CN number')
       return
@@ -35,14 +35,14 @@ export default function ShipmentTracking() {
     try {
       setLoading(true)
       setError('')
-      
+
       // TODO: Replace with actual API call
       // const response = await fetch(`/api/admin/track/${cnNumber}`)
       // const data = await response.json()
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1200))
-      
+
       // Mock tracking data with admin view
       const mockData = {
         cnNumber: cnNumber.toUpperCase(),
@@ -82,7 +82,7 @@ export default function ShipmentTracking() {
           { type: 'Delivery Sheet', id: 'DS-2024-001', date: '2024-01-18' }
         ]
       }
-      
+
       setTrackingData(mockData)
     } catch (error) {
       console.error('Error tracking shipment:', error)
@@ -106,9 +106,9 @@ export default function ShipmentTracking() {
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({ status: newStatus, stepKey })
       // })
-      
+
       await new Promise(resolve => setTimeout(resolve, 800))
-      
+
       // Update local state
       setTrackingData(prev => ({
         ...prev,
@@ -123,7 +123,7 @@ export default function ShipmentTracking() {
           }
         }
       }))
-      
+
       setEditingStatus(null)
       setNewStatus('')
     } catch (error) {
@@ -141,19 +141,19 @@ export default function ShipmentTracking() {
     try {
       // TODO: API call to add remarks
       await new Promise(resolve => setTimeout(resolve, 800))
-      
+
       const newRemark = {
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         user: 'Admin-001',
         note: remarks
       }
-      
+
       setTrackingData(prev => ({
         ...prev,
         remarks: [...(prev.remarks || []), newRemark]
       }))
-      
+
       setRemarks('')
       setShowRemarksModal(false)
     } catch (error) {
@@ -196,9 +196,6 @@ export default function ShipmentTracking() {
     <div className="max-w-7xl w-full">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Shipment Tracking</h1>
         <p className="text-sm text-gray-600">Full visibility and control over shipment lifecycle</p>
       </div>
@@ -265,7 +262,7 @@ export default function ShipmentTracking() {
                 </div>
                 <p className="text-lg font-bold text-gray-900">{trackingData.cnNumber}</p>
               </div>
-              
+
               <div className="bg-purple-50 rounded-md p-4 border border-purple-200">
                 <div className="flex items-center gap-2 mb-2">
                   <MapPin className="w-5 h-5 text-purple-600" />
@@ -273,7 +270,7 @@ export default function ShipmentTracking() {
                 </div>
                 <p className="text-lg font-bold text-gray-900">{trackingData.origin} → {trackingData.destination}</p>
               </div>
-              
+
               <div className="bg-sky-50 rounded-md p-4 border border-sky-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Truck className="w-5 h-5 text-sky-600" />
@@ -281,7 +278,7 @@ export default function ShipmentTracking() {
                 </div>
                 <p className="text-lg font-bold text-gray-900">{trackingData.serviceType}</p>
               </div>
-              
+
               <div className="bg-orange-50 rounded-md p-4 border border-orange-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock className="w-5 h-5 text-orange-600" />
@@ -291,7 +288,7 @@ export default function ShipmentTracking() {
                   {trackingData.currentStatus}
                 </span>
               </div>
-              
+
               <div className="bg-teal-50 rounded-md p-4 border border-teal-200">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="w-5 h-5 text-teal-600" />
@@ -302,7 +299,7 @@ export default function ShipmentTracking() {
                   <p className="text-sm text-gray-600">Rs. {trackingData.paymentAmount.toLocaleString()}</p>
                 )}
               </div>
-              
+
               <div className="bg-green-50 rounded-md p-4 border border-green-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-5 h-5 text-green-600" />
@@ -372,7 +369,7 @@ export default function ShipmentTracking() {
                 Add Remarks
               </button>
             </div>
-            
+
             {/* Desktop Timeline */}
             <div className="hidden lg:block">
               <div className="relative">
@@ -383,7 +380,7 @@ export default function ShipmentTracking() {
                     style={{ width: `${((getCurrentStepIndex() + 1) / timelineSteps.length) * 100}%` }}
                   ></div>
                 </div>
-                
+
                 {/* Timeline Steps */}
                 <div className="relative flex justify-between">
                   {timelineSteps.map((step, index) => {
@@ -391,16 +388,15 @@ export default function ShipmentTracking() {
                     const isCompleted = stepData !== null
                     const isCurrent = index === getCurrentStepIndex()
                     const isPending = index > getCurrentStepIndex()
-                    
+
                     return (
                       <div key={step.id} className="flex flex-col items-center" style={{ width: `${100 / timelineSteps.length}%` }}>
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all relative ${
-                          isCompleted
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all relative ${isCompleted
                             ? 'bg-sky-600 border-sky-600 text-white'
                             : isCurrent
-                            ? 'bg-white border-sky-600 text-sky-600'
-                            : 'bg-white border-gray-300 text-gray-400'
-                        }`}>
+                              ? 'bg-white border-sky-600 text-sky-600'
+                              : 'bg-white border-gray-300 text-gray-400'
+                          }`}>
                           {isCompleted ? (
                             <CheckCircle className="w-6 h-6" />
                           ) : (
@@ -486,21 +482,20 @@ export default function ShipmentTracking() {
                     style={{ height: `${((getCurrentStepIndex() + 1) / timelineSteps.length) * 100}%` }}
                   ></div>
                 </div>
-                
+
                 {timelineSteps.map((step, index) => {
                   const stepData = trackingData.timeline[step.key]
                   const isCompleted = stepData !== null
                   const isCurrent = index === getCurrentStepIndex()
-                  
+
                   return (
                     <div key={step.id} className="relative mb-8 last:mb-0">
-                      <div className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center border-4 -translate-x-1/2 transition-all ${
-                        isCompleted
+                      <div className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center border-4 -translate-x-1/2 transition-all ${isCompleted
                           ? 'bg-sky-600 border-sky-600 text-white'
                           : isCurrent
-                          ? 'bg-white border-sky-600 text-sky-600'
-                          : 'bg-white border-gray-300 text-gray-400'
-                      }`}>
+                            ? 'bg-white border-sky-600 text-sky-600'
+                            : 'bg-white border-gray-300 text-gray-400'
+                        }`}>
                         {isCompleted ? (
                           <CheckCircle className="w-4 h-4" />
                         ) : (

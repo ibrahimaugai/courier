@@ -558,20 +558,9 @@ export default function UserBookingConsignment() {
     <div className="max-w-7xl w-full">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Booking (Consignment)</h1>
           <div className="flex items-center gap-4">
-            <button className="px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition-colors flex items-center gap-2 font-medium shadow-md">
-              <Edit className="w-4 h-4" />
-              Edit Booking
-            </button>
-            <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-md">
-              <Sparkles className="w-4 h-4" />
-              New Booking
-            </button>
             <span className="text-sm text-gray-600 font-medium">VER -1.863 LIVE</span>
           </div>
         </div>

@@ -96,9 +96,6 @@ export default function BatchCutOff() {
       {/* Header Section */}
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <div className="flex items-center gap-4 mb-4">
-            <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-          </div>
           <h1 className="text-3xl font-bold text-gray-800">Batch Cut Off</h1>
         </div>
         <div className="text-right">

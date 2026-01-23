@@ -36,10 +36,7 @@ export default function LoadingToDd() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-2 sm:px-4 md:px-6 lg:px-8">
-      {/* Logo */}
-      <div className="flex items-center gap-4 mb-4">
-        <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-      </div>
+
       {/* Title */}
       <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-4 sm:mb-6">
         Manifest To Direct Delivery
@@ -49,7 +46,7 @@ export default function LoadingToDd() {
       <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-4">
         <div className="flex flex-col gap-4">
           <div className="text-sm font-medium text-gray-700 mb-2">Filters</div>
-          
+
           {/* Date Range and Destination Row */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 sm:gap-4">
             <div className="flex-1 sm:flex-initial">
@@ -66,7 +63,7 @@ export default function LoadingToDd() {
                 <Calendar className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400 pointer-events-none" />
               </div>
             </div>
-            
+
             <div className="flex-1 sm:flex-initial">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 END DATE
@@ -137,7 +134,7 @@ export default function LoadingToDd() {
                 <option value="100">100</option>
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <span className="text-xs sm:text-sm text-gray-700 whitespace-nowrap">Actions</span>
               <select
@@ -340,11 +337,10 @@ export default function LoadingToDd() {
             </button>
             <button
               onClick={() => setCurrentPage(1)}
-              className={`px-3 sm:px-4 py-2 border rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                currentPage === 1
+              className={`px-3 sm:px-4 py-2 border rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${currentPage === 1
                   ? 'bg-sky-600 text-white border-transparent'
                   : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-              }`}
+                }`}
             >
               1
             </button>

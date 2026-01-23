@@ -5,17 +5,17 @@ import { useDispatch, useSelector } from 'react-redux'
 import { UserPlus, Loader2, Eye, EyeOff } from 'lucide-react'
 import { registerUser, clearError } from '../../lib/store'
 
-export default function SignupForm({ 
-  onSuccess, 
-  showTitle = true, 
+export default function SignupForm({
+  onSuccess,
+  showTitle = true,
   showLoginLink = true,
   autoGeneratePassword = false,
   defaultRole = 'USER',
-  includeCustomerFields = false 
+  includeCustomerFields = false
 }) {
   const dispatch = useDispatch()
   const { isLoading, error } = useSelector((state) => state.auth)
-  
+
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -116,7 +116,7 @@ export default function SignupForm({
     }
 
     const result = await dispatch(registerUser(registrationData))
-    
+
     if (registerUser.fulfilled.match(result)) {
       // Call success callback if provided
       if (onSuccess) {
@@ -133,12 +133,23 @@ export default function SignupForm({
   return (
     <div className="w-full">
       {showTitle && (
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-600 to-cyan-600 rounded-2xl shadow-lg mb-4">
-            <UserPlus className="w-8 h-8 text-white" />
+        <div className="text-center mb-10">
+          <div className="flex justify-center">
+            <div className="relative group">
+              <div className="absolute -inset-1 "></div>
+              <div className="relative ">
+                <img
+                  src="/nps-logo.png"
+                  alt="NPS Logo"
+                  className="h-36 w-36 object-contain "
+                />
+              </div>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-          <p className="text-gray-600">Sign up for Courier RMS</p>
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2 bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-cyan-700">
+            Create Account
+          </h1>
+          <p className="text-gray-600 font-medium">Join the NPS Courier Network</p>
         </div>
       )}
 

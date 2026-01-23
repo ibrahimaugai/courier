@@ -284,9 +284,6 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
     <div className="max-w-7xl w-full">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">
             {isReadOnly ? 'View Booking' : 'Edit Booking'}

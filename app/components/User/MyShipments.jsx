@@ -161,9 +161,6 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
     <div className="max-w-7xl w-full">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-sky-600 to-cyan-600 bg-clip-text text-transparent mb-2">
           My Shipments
         </h1>

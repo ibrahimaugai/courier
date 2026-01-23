@@ -68,9 +68,7 @@ export default function CnVoid() {
     <div className="max-w-7xl">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
+
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">CN Void</h1>
           <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
@@ -122,8 +120,8 @@ export default function CnVoid() {
               </div>
               <div>
                 <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase ${bookingData.status === 'VOIDED'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-green-100 text-green-700'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-green-100 text-green-700'
                   }`}>
                   {bookingData.status}
                 </span>

@@ -51,12 +51,8 @@ export default function ArrivalScan({ setActivePage }) {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-2 sm:px-4 md:px-6 lg:px-8 animate-fade-in">
-      {/* Logo */}
-      <div className="flex items-center gap-4 mb-4">
-        <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-      </div>
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 mb-4 sm:mb-6">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 mb-4 sm:mb-6 pt-4">
         {/* Date Range Section */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 sm:gap-4">
           <div className="flex-1 sm:flex-initial">

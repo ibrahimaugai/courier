@@ -14,6 +14,7 @@ import { ConsignmentsModule } from './modules/consignments/consignments.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { BatchesModule } from './modules/batches/batches.module';
 import { OperationsModule } from './modules/operations/operations.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 
 // Configuration
 import configuration from './config/configuration';
@@ -87,6 +88,7 @@ import configuration from './config/configuration';
     ConfigurationModule,
     BatchesModule,
     OperationsModule,
+    PricingModule,
   ],
 })
 export class AppModule { }

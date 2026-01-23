@@ -118,9 +118,6 @@ export default function Configuration() {
 
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">System Configuration</h1>
           <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>

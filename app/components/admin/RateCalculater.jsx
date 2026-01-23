@@ -5,9 +5,6 @@ export default function RateCalculator() {
     <div className="max-w-7xl">
       {/* Header Section */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <img src="/nps-logo.png" alt="NPS Logo" className="h-12 w-auto" />
-        </div>
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">Rate Calculator</h1>
           <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
@@ -17,7 +14,7 @@ export default function RateCalculator() {
       {/* Calculate Shipment Rate Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-6">Calculate Shipment Rate</h2>
-        
+
         <div className="space-y-5">
           {/* Origin */}
           <div>
