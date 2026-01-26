@@ -129,7 +129,13 @@ export class PricingService {
     // 1. Create the primary rule
     const rule = await this.prisma.pricingRule.create({
       data: {
-        ...data,
+        originCityId: data.originCityId,
+        destinationCityId: data.destinationCityId,
+        serviceId: data.serviceId,
+        weightFrom: data.weightFrom,
+        weightTo: data.weightTo,
+        baseRate: data.baseRate,
+        ratePerKg: 0,
         effectiveFrom: new Date(),
         status: 'active',
       },
@@ -157,6 +163,7 @@ export class PricingService {
             weightFrom: data.weightFrom,
             weightTo: data.weightTo,
             baseRate: data.baseRate,
+            ratePerKg: 0,
             effectiveFrom: new Date(),
             status: 'active',
           },
