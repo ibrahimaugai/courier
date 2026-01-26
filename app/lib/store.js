@@ -813,6 +813,14 @@ export const fetchAllPricing = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message)
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { pricing } = getState()
+      if (pricing.isLoading) {
+        return false
+      }
+    },
   }
 )
 

@@ -1,10 +1,32 @@
 'use client'
 
-import { Printer, Save, Loader2 } from 'lucide-react'
+import { Printer, Save, Loader2, Info } from 'lucide-react'
 
-export default function OtherAmountSection({ formData, handleInputChange, handleSubmit, isSubmitting = false }) {
+export default function OtherAmountSection({ formData, handleInputChange, handleSubmit, isSubmitting = false, attestationInfo }) {
+  const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) return 'PKR 0'
+    return `PKR ${parseFloat(amount).toLocaleString('en-PK')}`
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 mt-6">
+
+      {/* Attestation Info Display */}
+      {attestationInfo && attestationInfo.days && (
+        <div className="mb-6 bg-sky-50 border border-sky-200 rounded-md p-4 flex items-start gap-3">
+          <Info className="w-5 h-5 text-sky-600 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold text-sky-800">Attestation Service Details:</p>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-1">
+              <p className="text-sky-700">Processing Time: <span className="font-semibold text-sky-900">{attestationInfo.days}</span></p>
+              {attestationInfo.addPageRate && (
+                <p className="text-sky-700">Add Page Rate: <span className="font-semibold text-2xl text-emerald-600">{formatCurrency(attestationInfo.addPageRate)}</span></p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Rate Input */}

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, Eye } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, Eye, Trash2, AlertCircle, CheckCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
 
 export default function CreateArrivalSheet({ setActivePage }) {
@@ -43,40 +43,56 @@ export default function CreateArrivalSheet({ setActivePage }) {
         setFormData(prev => ({ ...prev, arrivalSheetCode: `AR${year}${random}` }))
     }
 
-    const handleCnLookup = async (e) => {
+    const triggerCnLookup = useCallback(async (cn) => {
+        const trimmedCn = cn.trim()
+        if (!trimmedCn || isLoading) return
+
+        // Check if already scanned
+        if (scannedConsignments.some(item => item.cnNumber === trimmedCn)) {
+            setError('CN already added to this sheet.')
+            setFormData(prev => ({ ...prev, cnNumber: '' }))
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+        try {
+            const result = await api.trackBooking(trimmedCn)
+            const booking = result?.data || result
+
+            if (booking) {
+                setScannedConsignments(prev => [booking, ...prev])
+                setSuccess(`CN ${trimmedCn} Added!`)
+                setFormData(prev => ({ ...prev, cnNumber: '' }))
+            } else {
+                setError('Consignment not found.')
+            }
+        } catch (err) {
+            console.error('Error lookup CN:', err)
+            setError('CN not found or network error.')
+        } finally {
+            setIsLoading(false)
+        }
+    }, [isLoading, scannedConsignments])
+
+    const handleCnLookup = (e) => {
         if (e.key === 'Enter') {
             e.preventDefault()
-            const cn = formData.cnNumber.trim()
-            if (!cn) return
-
-            // Check if already scanned
-            if (scannedConsignments.some(item => item.cnNumber === cn)) {
-                setError('CN already added to this sheet.')
-                setFormData(prev => ({ ...prev, cnNumber: '' }))
-                return
-            }
-
-            setIsLoading(true)
-            setError('')
-            try {
-                const result = await api.trackBooking(cn)
-                const booking = result?.data || result
-
-                if (booking) {
-                    setScannedConsignments(prev => [booking, ...prev])
-                    setSuccess(`CN ${cn} Added!`)
-                    setFormData(prev => ({ ...prev, cnNumber: '' }))
-                } else {
-                    setError('Consignment not found.')
-                }
-            } catch (err) {
-                console.error('Error lookup CN:', err)
-                setError('CN not found or network error.')
-            } finally {
-                setIsLoading(false)
-            }
+            triggerCnLookup(formData.cnNumber)
         }
     }
+
+    // Auto-fetch CN details after typing (debounce)
+    useEffect(() => {
+        const cn = formData.cnNumber.trim()
+        // Only trigger if we have a reasonable length (standard CNs are ~11 chars)
+        if (cn.length >= 6) {
+            const timer = setTimeout(() => {
+                triggerCnLookup(cn)
+            }, 500) // Reduced to 500ms for faster feedback
+            return () => clearTimeout(timer)
+        }
+    }, [formData.cnNumber, triggerCnLookup])
 
     const handleCompleteSheet = async () => {
         if (scannedConsignments.length === 0) {
@@ -281,8 +297,9 @@ export default function CreateArrivalSheet({ setActivePage }) {
                                                     <button
                                                         onClick={() => setScannedConsignments(prev => prev.filter(b => b.id !== item.id))}
                                                         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                        title="Remove from list"
                                                     >
-                                                        <Eye className="w-4 h-4" />
+                                                        <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </td>
                                             </tr>
@@ -300,7 +317,7 @@ export default function CreateArrivalSheet({ setActivePage }) {
                 <div className={`fixed bottom-8 right-8 p-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${error ? 'bg-white text-red-600 border-red-100' : 'bg-white text-emerald-600 border-emerald-100'
                     }`}>
                     <div className={`p-2 rounded-full ${error ? 'bg-red-50' : 'bg-emerald-50'}`}>
-                        {error ? <Eye className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        {error ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
                     </div>
                     <p className="font-black text-sm uppercase tracking-tight pr-4">{error || success}</p>
                     <button onClick={() => { setError(''); setSuccess(''); }} className="text-gray-400 hover:text-gray-600 font-bold">×</button>

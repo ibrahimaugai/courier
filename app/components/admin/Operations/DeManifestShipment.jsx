@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Truck, MapPin, CheckCircle, AlertCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
 
@@ -79,35 +79,51 @@ export default function DeManifestShipment({ setActivePage, manifestId }) {
   }
 
   // Handle CN Scan
-  const handleCnLookup = (e) => {
-    if (e.key === 'Enter') {
-      const cn = formData.cn.trim()
-      if (!cn) return
+  const triggerCnUnload = useCallback((cn) => {
+    const trimmedCn = cn.trim()
+    if (!trimmedCn) return
 
-      // Find shipment
-      const shipment = shipments.find(s => s.cnNumber === cn)
-      if (shipment) {
-        // Mark as scanned
-        if (!scannedCns[cn]) {
-          setScannedCns(prev => ({
-            ...prev,
-            [cn]: new Date().toLocaleString()
-          }))
-          setSuccess(`CN ${cn} Unloaded!`)
-          setFormData(prev => ({ ...prev, cn: '' })) // Clear input
-          setError('')
-        } else {
-          setError(`CN ${cn} already scanned!`)
-          setFormData(prev => ({ ...prev, cn: '' }))
-        }
+    // Find shipment
+    const shipment = shipments.find(s => s.cnNumber === trimmedCn)
+    if (shipment) {
+      // Mark as scanned
+      if (!scannedCns[trimmedCn]) {
+        setScannedCns(prev => ({
+          ...prev,
+          [trimmedCn]: new Date().toLocaleString()
+        }))
+        setSuccess(`CN ${trimmedCn} Unloaded!`)
+        setFormData(prev => ({ ...prev, cn: '' })) // Clear input
+        setError('')
       } else {
-        setError(`CN ${cn} not in this manifest!`)
+        setError(`CN ${trimmedCn} already scanned!`)
         setFormData(prev => ({ ...prev, cn: '' }))
       }
-      // Keep focus
-      setTimeout(() => cnInputRef.current?.focus(), 100)
+    } else {
+      setError(`CN ${trimmedCn} not in this manifest!`)
+      setFormData(prev => ({ ...prev, cn: '' }))
+    }
+    // Keep focus
+    setTimeout(() => cnInputRef.current?.focus(), 100)
+  }, [shipments, scannedCns])
+
+  // Handle CN Scan
+  const handleCnLookup = (e) => {
+    if (e.key === 'Enter') {
+      triggerCnUnload(formData.cn)
     }
   }
+
+  // Auto-fetch CN details after typing (debounce)
+  useEffect(() => {
+    const cn = formData.cn.trim()
+    if (cn.length >= 6) {
+      const timer = setTimeout(() => {
+        triggerCnUnload(cn)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [formData.cn, triggerCnUnload])
 
   const handleManifestLookup = async (e) => {
     if (e.key === 'Enter') {

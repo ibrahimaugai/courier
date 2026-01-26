@@ -25,13 +25,15 @@ export default function BookingConsignment() {
   const [selectedIbccDocuments, setSelectedIbccDocuments] = useState([])
   const [showNationalBureauModal, setShowNationalBureauModal] = useState(false)
   const [selectedNationalBureauDocuments, setSelectedNationalBureauDocuments] = useState([])
+  const [attestationInfo, setAttestationInfo] = useState({ days: null, addPageRate: null })
   const [cnAllocationError, setCnAllocationError] = useState('')
   const dispatch = useDispatch()
   const { user } = useSelector((state) => state.auth)
-  const { cities, rules: reduxRules } = useSelector((state) => state.pricing)
+  const { cities, rules: reduxRules, services: reduxServices } = useSelector((state) => state.pricing)
 
   const [formData, setFormData] = useState({
     product: '',
+    originCity: '',  // FIXED: Added missing originCity field
     destination: '',
     cnNumber: '',
     pieces: '1',
@@ -120,23 +122,100 @@ export default function BookingConsignment() {
 
       if (applicableWeight <= 0) return 0
 
-      // Find matching rule from Redux state
-      // Note: formData.originCity and formData.destination are IDs from the dropdown
-      // formData.services is the serviceName (e.g. "Over Night")
-      const matchingRule = reduxRules.find(rule =>
-        rule.originCityId === formData.originCity &&
-        rule.destinationCityId === formData.destination &&
-        rule.service?.serviceName === formData.services &&
-        applicableWeight >= rule.weightFrom &&
-        applicableWeight < rule.weightTo
+      // Find all rules matching the route and service
+      let applicableRules = []
+
+      // map for days fallback (if backend schema is stale)
+      const ATTESTATION_DAYS_MAP = {
+        'Mofa General Attestation': '4 to 5 working days',
+        'Apostille Urgent single page': '4 to 5 working days',
+        'Appostille file URGENT': '4 to 5 working days',
+        'National Beuro Urgent': '10 to 12 working days',
+        'Uae Embassy': '7 to 8 working days',
+        'Saudia Embassy': '7 to 8 working days',
+        'Saudi Culture': '12 to 15 working days',
+        'Oman Embassy': '7 to 8 working days',
+        'Kuwait Embassy': '7 to 8 working days',
+        'Bahrain embassy': '7 to 8 working days',
+        'Qatar Embassy': '7 to 8 working days',
+        'Hec Attestation': '8 working days',
+        'University Verification': '4 to 5 working days',
+        'Ibcc Attestation Urgent': '4 to 5 working days',
+        'Gujranwala Borad verification': '4 to 5 working days',
+        'Fedral Board Verification': '5 to 6 working days',
+        'Lahore Board Verification': '5 to 6 working days',
+        'IBCC ENQUIVALENCE DEGREE + IBCC ATTEST': '12 WORKING DAYS',
+        'Technical Board verification': '5 to 6 working days',
+        'Foreigner marriage certificate': '6 working days',
+        'Divorce certificate General Mofa': '6 working days',
+        'Stamp paper General mofa': '6 working days',
+        'Stamp paper Apostille Urgent': '3 to 4 working days',
+        'Commercial documents urgent appostille': '12 working days',
+        'commercial documents Mofa Attestation': '6 working days',
+        'Stamp paper apostille Normal': '10 working days',
+        'Translation': '4 to 5 working days',
+      }
+
+      const getDays = (name) => {
+        // Try exact match first
+        if (ATTESTATION_DAYS_MAP[name]) return ATTESTATION_DAYS_MAP[name]
+
+        // Try case-insensitive lookup
+        const lower = name.toLowerCase()
+        const entry = Object.entries(ATTESTATION_DAYS_MAP).find(([k, v]) => k.toLowerCase() === lower)
+        return entry ? entry[1] : 'N/A'
+      }
+
+      if (formData.product === 'Attestation') {
+        applicableRules = reduxRules.filter(rule =>
+          rule.service?.serviceName === formData.services &&
+          rule.service?.serviceType === 'Attestation'
+        )
+
+        // Set Attestation Info
+        if (applicableRules.length > 0) {
+          const rule = applicableRules[0]
+          const days = rule.service?.days || getDays(rule.service?.serviceName)
+
+          // Update state only if changed to prevent loops
+          if (attestationInfo.days !== days || attestationInfo.addPageRate !== rule.additionalCharges) {
+            setAttestationInfo({
+              days: days,
+              addPageRate: rule.additionalCharges
+            })
+          }
+        } else {
+          if (attestationInfo.days !== null) setAttestationInfo({ days: null, addPageRate: null })
+        }
+      } else {
+        // Regular logic for other products
+        applicableRules = reduxRules.filter(rule =>
+          rule.originCityId === formData.originCity &&
+          rule.destinationCityId === formData.destination &&
+          rule.service?.serviceName === formData.services
+        )
+      }
+
+      if (applicableRules.length === 0) return 0
+
+      // Try to find exact weight tier match (using >= for lower bound - industry standard)
+      const matchingRule = applicableRules.find(rule =>
+        applicableWeight >= parseFloat(rule.weightFrom) &&
+        applicableWeight <= parseFloat(rule.weightTo)
       )
 
       if (matchingRule) {
-        return matchingRule.baseRate
+        return parseFloat(matchingRule.baseRate)
       }
 
-      // Fallback if no specific rule is found
-      return 0
+      // If weight exceeds all tiers, use the highest tier's rate
+      const highestTierRule = applicableRules.reduce((highest, current) => {
+        const currentWeightTo = parseFloat(current.weightTo)
+        const highestWeightTo = parseFloat(highest.weightTo)
+        return currentWeightTo > highestWeightTo ? current : highest
+      }, applicableRules[0])
+
+      return parseFloat(highestTierRule.baseRate)
     }
 
     const calculatedRate = calculateRate()
@@ -144,14 +223,31 @@ export default function BookingConsignment() {
     const { documents } = getSelectedDocuments()
     const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
     const otherAmount = parseFloat(formData.otherAmount || '0')
-    const totalAmount = ((calculatedRate || 0) * pieces) + documentTotal + otherAmount
+
+    // Force numeric safety (prevent type coercion issues)
+    const rate = Number(calculatedRate) || 0
+    const pcs = Number(pieces) || 1
+    const docTotal = Number(documentTotal) || 0
+    const other = Number(otherAmount) || 0
+
+    // Only calculate total if we have ALL required fields and a valid rate
+    const hasRequiredFields = formData.product && formData.originCity && formData.destination && formData.services && formData.weight
+
+    let finalRate = 0
+    let totalAmount = 0
+
+    if (hasRequiredFields && rate > 0) {
+      finalRate = rate
+      totalAmount = (rate * pcs) + docTotal + other
+    }
 
     setFormData(prev => ({
       ...prev,
-      rate: calculatedRate.toString(),
+      rate: finalRate.toString(),
       totalAmount: totalAmount
     }))
   }, [
+    formData.product,
     formData.originCity,
     formData.destination,
     formData.services,
@@ -176,9 +272,10 @@ export default function BookingConsignment() {
         ...prev,
         [name]: value
       }
-      // Reset services when product changes
+      // Reset services and otherAmount when product changes
       if (name === 'product') {
         updated.services = ''
+        updated.otherAmount = ''  // Clear other amount on product change
       }
       return updated
     })
@@ -769,6 +866,7 @@ export default function BookingConsignment() {
         onFileChange={handleFileChange}
         cnAllocationError={cnAllocationError}
         cities={cities}
+        services={reduxServices}
       />
 
       {/* Shipper Section */}
@@ -783,6 +881,7 @@ export default function BookingConsignment() {
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
         isSubmitting={isSubmitting}
+        attestationInfo={attestationInfo}
       />
 
       {/* Toast Notification */}

@@ -1,5 +1,9 @@
 'use client'
 
+import React, { useMemo } from 'react'
+
+const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation']
+
 export default function ShipmentDetails({
   formData,
   handleInputChange,
@@ -14,18 +18,27 @@ export default function ShipmentDetails({
   onOpenDocumentModal,
   onFileChange,
   cnAllocationError,
-  cities = []
+  cities = [],
+  services = [] // New prop
 }) {
-  // Whitelist of cities we care about
-  const WHITELIST_CODES = ['ISB', 'LHE', 'GUJ', 'SLT', 'NRL']
-
-  // Filter for the 5 primary cities
+  // Get all active operational cities
   const activeCities = cities
-    .filter(city => city && city.cityCode && WHITELIST_CODES.includes(city.cityCode.toUpperCase()))
+    .filter(city => city && city.status === 'active')
     .sort((a, b) => a.cityName.localeCompare(b.cityName))
 
+  // Get available products (service types) - Fixed whitelist
+  const availableProducts = PRODUCT_TYPES
+
+  // Get available services for the selected product
+  const availableServices = useMemo(() => {
+    if (!services || !Array.isArray(services) || !formData.product) return []
+    return services
+      .filter(s => s.serviceType === formData.product)
+      .map(s => ({ value: s.serviceName, label: s.serviceName }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [services, formData.product])
+
   // Determine which document section to show based on selected service
-  // ... (keeping existing logic)
   const getDocumentSectionInfo = () => {
     const service = formData.services || ''
 
@@ -90,55 +103,6 @@ export default function ShipmentDetails({
 
   const documentSection = getDocumentSectionInfo()
 
-  // Get services based on selected product
-  const getServicesByProduct = () => {
-    const product = formData.product || ''
-
-    if (product === 'General') {
-      return [
-        { value: 'Over Night', label: 'Over Night' },
-        { value: 'L-Flayer', label: 'L-Flayer' },
-        { value: 'Blue Box', label: 'Blue Box' },
-        { value: 'On Time Service', label: 'On Time Service' },
-      ]
-    } else if (product === 'International') {
-      return [
-        { value: 'INTL - DOCUMENTS', label: 'INTL - DOCUMENTS' },
-        { value: 'INTL - NON DOCUMENTS', label: 'INTL - NON DOCUMENTS' },
-      ]
-    } else if (product === 'OLE') {
-      return [
-        { value: 'OLE - OVERLAND', label: 'OLE - OVERLAND' },
-        { value: 'OLE - PACK AND GO', label: 'OLE - PACK AND GO' },
-      ]
-    } else if (product === 'Logistics') {
-      return [
-        { value: 'LC - CARGO', label: 'LC - CARGO' },
-      ]
-    } else if (product === 'Sentiments') {
-      return [
-        { value: 'SE - SAME DAY', label: 'SE - SAME DAY' },
-        { value: 'SE - OVERNIGHT', label: 'SE - OVERNIGHT' },
-      ]
-    } else if (product === 'Attestation') {
-      return [
-        { value: 'ATS - Doc MOFA Attestation', label: 'ATS - Doc MOFA Attestation' },
-        { value: 'ATR - Doc MOFA Home Delivery', label: 'ATR - Doc MOFA Home Delivery' },
-        { value: 'APN - Apostille Normal', label: 'APN - Apostille Normal' },
-        { value: 'APU - Apostille Urgent', label: 'APU - Apostille Urgent' },
-        { value: 'AE - UAE Embassy', label: 'AE - UAE Embassy' },
-        { value: 'BV - Board Verification', label: 'BV - Board Verification' },
-        { value: 'HEC - HEC', label: 'HEC - HEC' },
-        { value: 'IBCC - IBCC', label: 'IBCC - IBCC' },
-        { value: 'National Bureau', label: 'National Bureau' },
-      ]
-    }
-
-    return []
-  }
-
-  const availableServices = getServicesByProduct()
-
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
       {/* Header */}
@@ -165,12 +129,9 @@ export default function ShipmentDetails({
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors"
                 >
                   <option value="" disabled>Select Product</option>
-                  <option value="General">General</option>
-                  <option value="International">International</option>
-                  <option value="OLE">OLE</option>
-                  <option value="Logistics">Logistics</option>
-                  <option value="Sentiments">Sentiments</option>
-                  <option value="Attestation">Attestation</option>
+                  {availableProducts.map(product => (
+                    <option key={product} value={product}>{product}</option>
+                  ))}
                 </select>
               </div>
 
@@ -430,4 +391,3 @@ export default function ShipmentDetails({
     </div>
   )
 }
-

@@ -829,6 +829,19 @@ export const api = {
   },
 
   /**
+   * Create a new pricing rule
+   * @param {object} data - Rule data
+   * @returns {Promise<object>} - Created rule
+   */
+  async createPricingRule(data) {
+    const response = await this.request('/pricing/rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
    * Update a pricing rule
    * @param {string} id - Rule ID
    * @param {object} data - Update data (baseRate, ratePerKg, etc.)
@@ -838,6 +851,84 @@ export const api = {
     const response = await this.request(`/pricing/rules/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Create a new service
+   * @param {object} data - Service data (serviceName, serviceType, serviceCode)
+   * @returns {Promise<object>} - Created service
+   */
+  async createService(data) {
+    const response = await this.request('/pricing/services', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Update a service
+   * @param {string} id - Service ID
+   * @param {object} data - Update data (serviceName, serviceType, status)
+   * @returns {Promise<object>} - Updated service
+   */
+  async updateService(id, data) {
+    const response = await this.request(`/pricing/services/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Delete or deactivate a service
+   * @param {string} id - Service ID
+   * @returns {Promise<object>} - Result
+   */
+  async deleteService(id) {
+    const response = await this.request(`/pricing/services/${id}`, {
+      method: 'DELETE',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Create a new city
+   * @param {object} data - City data (cityName, cityCode)
+   * @returns {Promise<object>} - Created city
+   */
+  async createCity(data) {
+    const response = await this.request('/pricing/cities', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Update a city
+   * @param {string} id - City ID
+   * @param {object} data - Update data (cityName, cityCode, status)
+   * @returns {Promise<object>} - Updated city
+   */
+  async updateCity(id, data) {
+    const response = await this.request(`/pricing/cities/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Delete or deactivate a city
+   * @param {string} id - City ID
+   * @returns {Promise<object>} - Result
+   */
+  async deleteCity(id) {
+    const response = await this.request(`/pricing/cities/${id}`, {
+      method: 'DELETE',
     })
     return this.handleResponse(response)
   },

@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Edit, Sparkles, X, Loader2 } from 'lucide-react'
+import { useDispatch, useSelector } from 'react-redux'
+import { fetchAllPricing } from '../../../lib/store'
 import { api } from '../../../lib/api'
 import Toast from '../../Toast'
 import UserShipmentDetails from './UserShipmentDetails'
@@ -10,6 +12,10 @@ import UserConsignee from './UserConsignee'
 import UserOtherAmountSection from './UserOtherAmountSection'
 
 export default function UserBookingConsignment() {
+  const dispatch = useDispatch()
+  const { rules: reduxRules, cities, services: reduxServices, isLoading: pricingLoading } = useSelector((state) => state.pricing)
+
+
   const [showMofaModal, setShowMofaModal] = useState(false)
   const [selectedDocuments, setSelectedDocuments] = useState([])
   const [showApostilleModal, setShowApostilleModal] = useState(false)
@@ -63,15 +69,10 @@ export default function UserBookingConsignment() {
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
   const [documentFiles, setDocumentFiles] = useState([])
 
-  // Set default origin city
+  // Fetch pricing data on mount
   useEffect(() => {
-    if (!formData.originCity) {
-      setFormData(prev => ({
-        ...prev,
-        originCity: 'KHI - Karachi' // Default or fetch from user profile
-      }))
-    }
-  }, [])
+    dispatch(fetchAllPricing())
+  }, [dispatch])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -87,17 +88,11 @@ export default function UserBookingConsignment() {
       return updated
     })
   }
-
   // Auto-open document modal when service requiring documents is selected
   useEffect(() => {
     const service = formData.services || ''
 
-    // Handle International Documents - could open a combined modal or MOFA as default
-    if (service === 'INTL - DOCUMENTS') {
-      // For now, open MOFA modal as default for International Documents
-      // You can customize this to open a different modal or a combined modal
-      setShowMofaModal(true)
-    } else if (service === 'ATS - Doc MOFA Attestation' || service === 'ATR - Doc MOFA Home Delivery') {
+    if (service === 'ATS - Doc MOFA Attestation' || service === 'ATR - Doc MOFA Home Delivery') {
       setShowMofaModal(true)
     } else if (service === 'APN - Apostille Normal' || service === 'APU - Apostille Urgent') {
       setShowApostilleModal(true)
@@ -113,6 +108,118 @@ export default function UserBookingConsignment() {
       setShowNationalBureauModal(true)
     }
   }, [formData.services])
+
+  // Dynamic Rate Calculation (Mirroring Admin Logic)
+  const calculateRate = useMemo(() => {
+    return () => {
+      if (!reduxRules || reduxRules.length === 0) return 0
+
+      const { originCity, destination, services, product, weight, volumetricWeight } = formData
+
+      if (!services || !product || (!weight && !volumetricWeight)) {
+        return 0
+      }
+
+      // Origin and Destination are required for non-Attestation products
+      if (product !== 'Attestation' && (!originCity || !destination)) {
+        return 0
+      }
+
+      // 1. Calculate Applicable Weight (Max of physical and volumetric)
+      const physicalWeight = parseFloat(weight) || 0
+      const volWeight = parseFloat(volumetricWeight) || 0
+      const applicableWeight = Math.max(physicalWeight, volWeight)
+
+      // 2. Find matching rules
+      let applicableRules = []
+
+      if (product === 'Attestation') {
+        // Attestation rates are primarily service-based
+        applicableRules = reduxRules.filter(r =>
+          r.service?.serviceName === services &&
+          r.service?.serviceType === 'Attestation'
+        )
+      } else {
+        applicableRules = reduxRules.filter(r =>
+          r.originCityId === originCity &&
+          r.destinationCityId === destination &&
+          r.service?.serviceName === services
+        )
+      }
+
+      if (applicableRules.length === 0) return 0
+
+      // 3. Find exact weight tier match
+      const matchingRule = applicableRules.find(r =>
+        applicableWeight >= parseFloat(r.weightFrom) &&
+        applicableWeight <= parseFloat(r.weightTo)
+      )
+
+      if (matchingRule) {
+        return parseFloat(matchingRule.baseRate) || 0
+      }
+
+      // 4. Fallback: If weight exceeds all tiers, use the highest tier's rate
+      const highestTierRule = applicableRules.reduce((highest, current) => {
+        return parseFloat(current.weightTo) > parseFloat(highest.weightTo) ? current : highest
+      }, applicableRules[0])
+
+      return parseFloat(highestTierRule.baseRate) || 0
+    }
+  }, [reduxRules, formData.originCity, formData.destination, formData.services, formData.weight, formData.volumetricWeight, formData.product])
+
+  // Update totalAmount whenever pricing factors change
+  useEffect(() => {
+    const baseRate = calculateRate()
+    const pieces = parseInt(formData.pieces || '1')
+
+    // Total for all pieces
+    const rateTotal = baseRate * pieces
+
+    // Add other charges
+    const otherAmount = parseFloat(formData.otherAmount) || 0
+
+    // Add document prices
+    const getSelectedDocuments = () => {
+      const docs = [
+        ...selectedDocuments.map(id => mofaDocuments.find(d => d.id === id)),
+        ...selectedApostilleDocuments.map(id => apostilleDocuments.find(d => d.id === id)),
+        ...selectedUaeEmbassyDocuments.map(id => uaeEmbassyDocuments.find(d => d.id === id)),
+        ...selectedBoardVerificationDocuments.map(id => boardVerificationDocuments.find(d => d.id === id)),
+        ...selectedHecDocuments.map(id => hecDocuments.find(d => d.id === id)),
+        ...selectedIbccDocuments.map(id => ibccDocuments.find(d => d.id === id)),
+        ...selectedNationalBureauDocuments.map(id => nationalBureauDocuments.find(d => d.id === id))
+      ].filter(Boolean)
+      return docs
+    }
+
+    const docs = getSelectedDocuments()
+    const docsTotal = docs.reduce((sum, doc) => sum + (doc.price || 0), 0)
+
+    const physicalWeight = parseFloat(formData.weight) || 0
+    const volWeight = parseFloat(formData.volumetricWeight) || 0
+    const chargeableWeight = Math.max(physicalWeight, volWeight)
+
+    setFormData(prev => ({
+      ...prev,
+      rate: baseRate,
+      totalAmount: rateTotal + otherAmount + docsTotal,
+      chargeableWeight: chargeableWeight
+    }))
+  }, [
+    calculateRate,
+    formData.pieces,
+    formData.otherAmount,
+    selectedDocuments,
+    selectedApostilleDocuments,
+    selectedUaeEmbassyDocuments,
+    selectedBoardVerificationDocuments,
+    selectedHecDocuments,
+    selectedIbccDocuments,
+    selectedNationalBureauDocuments,
+    formData.weight,
+    formData.volumetricWeight
+  ])
 
   const handleOpenDocumentModal = (modalType) => {
     switch (modalType) {
@@ -431,7 +538,37 @@ export default function UserBookingConsignment() {
         const doc = apostilleDocuments.find(d => d.id === id)
         return doc ? { name: doc.name, price: doc.price } : null
       }).filter(Boolean)
-    } // ... rest of the services can be added similarly
+    } else if (service === 'AE - UAE Embassy') {
+      documentServiceType = 'UAE Embassy'
+      documents = selectedUaeEmbassyDocuments.map(id => {
+        const doc = uaeEmbassyDocuments.find(d => d.id === id)
+        return doc ? { name: doc.name, price: doc.price } : null
+      }).filter(Boolean)
+    } else if (service === 'BV - Board Verification') {
+      documentServiceType = 'Board Verification'
+      documents = selectedBoardVerificationDocuments.map(id => {
+        const doc = boardVerificationDocuments.find(d => d.id === id)
+        return doc ? { name: doc.name, price: doc.price } : null
+      }).filter(Boolean)
+    } else if (service === 'HEC - HEC') {
+      documentServiceType = 'HEC'
+      documents = selectedHecDocuments.map(id => {
+        const doc = hecDocuments.find(d => d.id === id)
+        return doc ? { name: doc.name, price: doc.price } : null
+      }).filter(Boolean)
+    } else if (service === 'IBCC - IBCC') {
+      documentServiceType = 'IBCC'
+      documents = selectedIbccDocuments.map(id => {
+        const doc = ibccDocuments.find(d => d.id === id)
+        return doc ? { name: doc.name, price: doc.price } : null
+      }).filter(Boolean)
+    } else if (service === 'National Bureau') {
+      documentServiceType = 'National Bureau'
+      documents = selectedNationalBureauDocuments.map(id => {
+        const doc = nationalBureauDocuments.find(d => d.id === id)
+        return doc ? { name: doc.name, price: doc.price } : null
+      }).filter(Boolean)
+    }
 
     return { documents, documentServiceType }
   }
@@ -489,10 +626,11 @@ export default function UserBookingConsignment() {
         consigneeEmailAddress: formData.consigneeEmailAddress || undefined,
         consigneeZipCode: formData.consigneeZipCode || undefined,
 
-        // Pricing (Admin will finalize these)
-        rate: 0,
-        otherAmount: 0,
-        totalAmount: 0,
+        // Pricing
+        rate: formData.rate || 0,
+        otherAmount: parseFloat(formData.otherAmount) || 0,
+        totalAmount: formData.totalAmount || 0,
+        chargeableWeight: formData.chargeableWeight || 0,
 
         // Documents
         documents: documents.length > 0 ? documents : undefined,
@@ -537,7 +675,7 @@ export default function UserBookingConsignment() {
         consigneeZipCode: '',
         otherAmount: '',
         totalAmount: 0,
-        originCity: 'KHI - Karachi'
+        originCity: ''
       })
       setSelectedDocuments([])
       setDocumentFiles([])
@@ -566,6 +704,15 @@ export default function UserBookingConsignment() {
         </div>
       </div>
 
+      {pricingLoading && (
+        <div className="flex items-center justify-center p-12 bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-sky-600" />
+            <p className="text-gray-600 font-medium">Fetching available cities and services...</p>
+          </div>
+        </div>
+      )}
+
       {/* Shipment Details Section */}
       <UserShipmentDetails
         formData={formData}
@@ -579,6 +726,8 @@ export default function UserBookingConsignment() {
         selectedIbccDocuments={selectedIbccDocuments}
         selectedNationalBureauDocuments={selectedNationalBureauDocuments}
         onOpenDocumentModal={handleOpenDocumentModal}
+        cities={cities}
+        services={reduxServices}
       />
 
       {/* Shipper Section */}

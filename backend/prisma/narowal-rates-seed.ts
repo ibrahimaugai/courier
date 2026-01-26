@@ -9,6 +9,7 @@ const CITY_CODES = {
   ISLAMABAD: 'ISB',
   LAHORE: 'LHE',
   GUJRANWALA: 'GUJ',
+  KARACHI: 'KCH',
 };
 
 // Service names mapping
@@ -218,11 +219,17 @@ async function getOrCreateService(serviceName: string) {
       data: {
         serviceCode,
         serviceName,
-        serviceType: 'GENERAL',
+        serviceType: 'General',
         status: 'active',
       },
     });
     console.log(`Created service: ${serviceName} (${serviceCode})`);
+  } else if (service.serviceType !== 'General') {
+    service = await prisma.service.update({
+      where: { id: service.id },
+      data: { serviceType: 'General' }
+    });
+    console.log(`Updated service type: ${serviceName} -> General`);
   }
 
   return service;
@@ -310,6 +317,7 @@ function getCityName(cityCode: string): string {
     ISB: 'Islamabad',
     LHE: 'Lahore',
     GUJ: 'Gujranwala',
+    KCH: 'Karachi',
   };
   return cityNames[cityCode] || cityCode;
 }

@@ -54,7 +54,7 @@ export default function EditBooking() {
         totalAmount: 0,
     })
 
-    const { rules: reduxRules, cities } = useSelector((state) => state.pricing)
+    const { rules: reduxRules, cities, services } = useSelector((state) => state.pricing)
 
     const handleSearch = async (e) => {
         e.preventDefault()
@@ -290,6 +290,7 @@ export default function EditBooking() {
                         handleInputChange={handleInputChange}
                         handleSubmit={handleSubmit}
                         cities={cities}
+                        services={services}
                     />
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

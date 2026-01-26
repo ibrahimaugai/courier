@@ -13,6 +13,7 @@ export class PricingService {
             id: true,
             cityCode: true,
             cityName: true,
+            status: true,
           },
         },
         destinationCity: {
@@ -20,6 +21,7 @@ export class PricingService {
             id: true,
             cityCode: true,
             cityName: true,
+            status: true,
           },
         },
         service: {
@@ -27,6 +29,8 @@ export class PricingService {
             id: true,
             serviceCode: true,
             serviceName: true,
+            serviceType: true,
+            status: true,
           },
         },
       },
@@ -60,6 +64,7 @@ export class PricingService {
             id: true,
             cityCode: true,
             cityName: true,
+            status: true,
           },
         },
         destinationCity: {
@@ -67,6 +72,7 @@ export class PricingService {
             id: true,
             cityCode: true,
             cityName: true,
+            status: true,
           },
         },
         service: {
@@ -74,6 +80,8 @@ export class PricingService {
             id: true,
             serviceCode: true,
             serviceName: true,
+            serviceType: true,
+            status: true,
           },
         },
       },
@@ -88,13 +96,12 @@ export class PricingService {
 
   async getCities() {
     return await this.prisma.city.findMany({
-      where: {
-        status: 'active',
-      },
       select: {
         id: true,
         cityCode: true,
         cityName: true,
+        province: true,
+        status: true,
       },
       orderBy: {
         cityName: 'asc',
@@ -104,18 +111,60 @@ export class PricingService {
 
   async getServices() {
     return await this.prisma.service.findMany({
-      where: {
-        status: 'active',
-      },
       select: {
         id: true,
         serviceCode: true,
         serviceName: true,
+        serviceType: true,
+        days: true,
+        status: true,
       },
       orderBy: {
         serviceName: 'asc',
       },
     });
+  }
+
+  async createPricingRule(data: { originCityId: string; destinationCityId: string; serviceId: string; weightFrom: number; weightTo: number; baseRate: number }) {
+    // 1. Create the primary rule
+    const rule = await this.prisma.pricingRule.create({
+      data: {
+        ...data,
+        effectiveFrom: new Date(),
+        status: 'active',
+      },
+    });
+
+    // 2. Handle Symmetry: Create the reverse route rule if it's not a self-to-self route
+    if (data.originCityId !== data.destinationCityId) {
+      // Check if reverse rule already exists
+      const existingReverse = await this.prisma.pricingRule.findFirst({
+        where: {
+          originCityId: data.destinationCityId,
+          destinationCityId: data.originCityId,
+          serviceId: data.serviceId,
+          weightFrom: data.weightFrom,
+          weightTo: data.weightTo,
+        },
+      });
+
+      if (!existingReverse) {
+        await this.prisma.pricingRule.create({
+          data: {
+            originCityId: data.destinationCityId,
+            destinationCityId: data.originCityId,
+            serviceId: data.serviceId,
+            weightFrom: data.weightFrom,
+            weightTo: data.weightTo,
+            baseRate: data.baseRate,
+            effectiveFrom: new Date(),
+            status: 'active',
+          },
+        });
+      }
+    }
+
+    return rule;
   }
 
   async updatePricingRule(id: string, data: any) {
@@ -149,5 +198,77 @@ export class PricingService {
     }
 
     return updatedRule;
+  }
+
+  // ============================================
+  // SERVICE MANAGEMENT
+  // ============================================
+
+  async createService(data: { serviceName: string; serviceType: string; serviceCode?: string }) {
+    const serviceCode = data.serviceCode || data.serviceName.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 100);
+    return await this.prisma.service.create({
+      data: {
+        ...data,
+        serviceCode,
+      },
+    });
+  }
+
+  async updateService(id: string, data: any) {
+    return await this.prisma.service.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteService(id: string) {
+    const service = await this.prisma.service.findUnique({
+      where: { id },
+    });
+
+    if (service.status === 'active') {
+      return await this.prisma.service.update({
+        where: { id },
+        data: { status: 'inactive' },
+      });
+    } else {
+      return await this.prisma.service.delete({
+        where: { id },
+      });
+    }
+  }
+
+  // ============================================
+  // CITY MANAGEMENT
+  // ============================================
+
+  async createCity(data: { cityName: string; cityCode: string }) {
+    return await this.prisma.city.create({
+      data,
+    });
+  }
+
+  async updateCity(id: string, data: any) {
+    return await this.prisma.city.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteCity(id: string) {
+    const city = await this.prisma.city.findUnique({
+      where: { id },
+    });
+
+    if (city.status === 'active') {
+      return await this.prisma.city.update({
+        where: { id },
+        data: { status: 'inactive' },
+      });
+    } else {
+      return await this.prisma.city.delete({
+        where: { id },
+      });
+    }
   }
 }

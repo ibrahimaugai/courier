@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, Trash2, Truck, Phone, MapPin } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, Trash2, Truck, Phone, MapPin, AlertCircle, CheckCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
 
 export default function CreateNewManifest({ setActivePage }) {
@@ -63,40 +63,55 @@ export default function CreateNewManifest({ setActivePage }) {
     setFormData(prev => ({ ...prev, manifestCode: `MENI${year}${random}` }))
   }
 
-  const handleCnLookup = async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const cn = formData.cnNumber.trim()
-      if (!cn) return
+  const triggerCnLookup = useCallback(async (cn) => {
+    const trimmedCn = cn.trim()
+    if (!trimmedCn || isLoading) return
 
-      // Check if already scanned
-      if (scannedConsignments.some(item => item.cnNumber === cn)) {
-        setError('CN already added to this manifest.')
+    // Check if already scanned
+    if (scannedConsignments.some(item => item.cnNumber === trimmedCn)) {
+      setError('CN already added to this manifest.')
+      setFormData(prev => ({ ...prev, cnNumber: '' }))
+      return
+    }
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const result = await api.trackBooking(trimmedCn)
+      const booking = result?.data || result
+
+      if (booking) {
+        setScannedConsignments(prev => [booking, ...prev])
+        setSuccess(`CN ${trimmedCn} Added!`)
         setFormData(prev => ({ ...prev, cnNumber: '' }))
-        return
+      } else {
+        setError('Consignment not found.')
       }
+    } catch (err) {
+      console.error('Error lookup CN:', err)
+      setError('CN not found or network error.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isLoading, scannedConsignments])
 
-      setIsLoading(true)
-      setError('')
-      try {
-        const result = await api.trackBooking(cn)
-        const booking = result?.data || result
-
-        if (booking) {
-          setScannedConsignments(prev => [booking, ...prev])
-          setSuccess(`CN ${cn} Added!`)
-          setFormData(prev => ({ ...prev, cnNumber: '' }))
-        } else {
-          setError('Consignment not found.')
-        }
-      } catch (err) {
-        console.error('Error lookup CN:', err)
-        setError('CN not found or network error.')
-      } finally {
-        setIsLoading(false)
-      }
+  const handleCnLookup = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerCnLookup(formData.cnNumber);
     }
   }
+
+  // Auto-fetch CN details after typing (debounce)
+  useEffect(() => {
+    const cn = formData.cnNumber.trim();
+    if (cn.length >= 6) {
+      const timer = setTimeout(() => {
+        triggerCnLookup(cn);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [formData.cnNumber, triggerCnLookup]);
 
   const handleSaveChanges = async () => {
     if (scannedConsignments.length === 0) {
@@ -432,7 +447,7 @@ export default function CreateNewManifest({ setActivePage }) {
         <div className={`fixed bottom-8 right-8 p-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${error ? 'bg-white text-red-600 border-red-100' : 'bg-white text-emerald-600 border-emerald-100'
           }`}>
           <div className={`p-2 rounded-full ${error ? 'bg-red-50' : 'bg-emerald-50'}`}>
-            {error ? <Package className="w-5 h-5" /> : <Package className="w-5 h-5" />}
+            {error ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
           </div>
           <p className="font-black text-sm uppercase tracking-tight pr-4">{error || success}</p>
           <button onClick={() => { setError(''); setSuccess(''); }} className="text-gray-400 hover:text-gray-600 font-bold">×</button>

@@ -129,6 +129,7 @@ model Service {
   serviceCode String   @unique @map("service_code")
   serviceName String   @map("service_name")
   serviceType String   @map("service_type")
+  days        String?  @map("days") // Processing time (e.g., "4 to 5 working days")
   status      String   @default("active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

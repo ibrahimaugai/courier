@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Truck, MapPin, CheckCircle, AlertCircle, Phone, FileText } from 'lucide-react'
 import { api } from '../../../lib/api'
 
@@ -84,45 +84,62 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
         }
     }
 
-    const handleCnKeyDown = async (e) => {
-        if (e.key === 'Enter') {
-            const cn = formData.cn.trim()
-            if (!cn) return
+    const triggerCnScan = useCallback(async (cn) => {
+        const trimmedCn = cn.trim()
+        if (!trimmedCn || isLoading) return
 
-            if (shipments.some(s => s.cn === cn)) {
-                setError('CN already scanned')
-                setFormData(prev => ({ ...prev, cn: '' }))
-                return
-            }
+        if (shipments.some(s => s.cn === trimmedCn)) {
+            setError('CN already scanned')
+            setFormData(prev => ({ ...prev, cn: '' }))
+            return
+        }
 
-            setIsLoading(true)
-            try {
-                const res = await api.trackBooking(cn)
-                const booking = res.data || res
-                if (booking) {
-                    const newShipment = {
-                        sr: shipments.length + 1,
-                        cn: booking.cnNumber,
-                        status: 'Pending',
-                        origin: booking.originCity?.cityName || 'N/A',
-                        weight: booking.weight,
-                        pieces: booking.pieces,
-                        fod: booking.codAmount || '0',
-                        scannedAt: new Date().toLocaleTimeString()
-                    }
-                    setShipments([newShipment, ...shipments])
-                    setSuccess(`CN ${cn} Scanned!`)
-                } else {
-                    setError('CN Not Found')
+        setIsLoading(true)
+        try {
+            const res = await api.trackBooking(trimmedCn)
+            const booking = res.data || res
+            if (booking) {
+                const newShipment = {
+                    sr: shipments.length + 1,
+                    cn: booking.cnNumber,
+                    status: 'Pending',
+                    origin: booking.originCity?.cityName || 'N/A',
+                    weight: booking.weight,
+                    pieces: booking.pieces,
+                    fod: booking.codAmount || '0',
+                    scannedAt: new Date().toLocaleTimeString()
                 }
-            } catch (err) {
-                setError('Error tracking CN')
-            } finally {
-                setIsLoading(false)
-                setFormData(prev => ({ ...prev, cn: '' }))
+                setShipments([newShipment, ...shipments])
+                setSuccess(`CN ${trimmedCn} Scanned!`)
+            } else {
+                setError('CN Not Found')
             }
+        } catch (err) {
+            setError('Error tracking CN')
+        } finally {
+            setIsLoading(false)
+            setFormData(prev => ({ ...prev, cn: '' }))
+            // Keep focus
+            setTimeout(() => cnInputRef.current?.focus(), 100)
+        }
+    }, [isLoading, shipments])
+
+    const handleCnKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            triggerCnScan(formData.cn)
         }
     }
+
+    // Auto-fetch CN details after typing (debounce)
+    useEffect(() => {
+        const cn = formData.cn.trim()
+        if (cn.length >= 6) {
+            const timer = setTimeout(() => {
+                triggerCnScan(cn)
+            }, 500)
+            return () => clearTimeout(timer)
+        }
+    }, [formData.cn, triggerCnScan])
 
     const handleSave = async () => {
         if (!formData.riderSearch) {
