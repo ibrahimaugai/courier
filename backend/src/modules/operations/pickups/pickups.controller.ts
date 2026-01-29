@@ -48,8 +48,9 @@ export class PickupsController {
         @Param('id') id: string,
         @Body('status') status: PickupStatus,
         @Body('riderId') riderId?: string,
+        @Body('riderName') riderName?: string,
     ) {
-        return this.pickupsService.updateStatus(id, status, riderId);
+        return this.pickupsService.updateStatus(id, status, riderId, riderName);
     }
 
     @Post(':id/cancel')

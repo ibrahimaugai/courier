@@ -42,6 +42,22 @@ export class PricingController {
     return await this.pricingService.getServices();
   }
 
+  @Get('subservices')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.USER)
+  @ApiOperation({ summary: 'Get subservices for a given service category' })
+  @ApiQuery({ name: 'serviceName', required: true, description: 'Service category name (e.g., NPS All Services)' })
+  async getSubservices(@Query('serviceName') serviceName: string) {
+    if (!serviceName) {
+      return [];
+    }
+    try {
+      return await this.pricingService.getSubservices(serviceName);
+    } catch (error) {
+      console.error('Error fetching subservices:', error);
+      return [];
+    }
+  }
+
   @Patch('rules/:id')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update a pricing rule (with symmetry)' })

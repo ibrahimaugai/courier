@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react'
 
-const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation']
+const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation', 'COD']
 
 export default function ShipmentDetails({
   formData,
@@ -19,7 +19,10 @@ export default function ShipmentDetails({
   onFileChange,
   cnAllocationError,
   cities = [],
-  services = [] // New prop
+  services = [], // New prop
+  selectedSubservices = [],
+  onOpenSubservicesModal,
+  subservicesData = {},
 }) {
   // Get all active operational cities
   const activeCities = cities
@@ -32,15 +35,51 @@ export default function ShipmentDetails({
   // Get available services for the selected product
   const availableServices = useMemo(() => {
     if (!services || !Array.isArray(services) || !formData.product) return []
+    
+    // Special handling for Attestation product
+    if (formData.product === 'Attestation') {
+      // Return predefined attestation service categories
+      return [
+        { value: 'NPS All Services', label: 'NPS All Services' },
+        { value: 'Embassies Attestation', label: 'Embassies Attestation' },
+        { value: 'Educational Documents Attestation', label: 'Educational Documents Attestation' },
+        { value: 'Special Documents', label: 'Special Documents' },
+        { value: 'Translation of any embassy', label: 'Translation of any embassy' },
+      ]
+    }
+    
+    // Regular services for other products
     return services
       .filter(s => s.serviceType === formData.product)
       .map(s => ({ value: s.serviceName, label: s.serviceName }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [services, formData.product])
 
+  // Check if current service is an attestation service that needs subservices
+  const isAttestationService = useMemo(() => {
+    if (formData.product !== 'Attestation') return false
+    const attestationServices = [
+      'NPS All Services',
+      'Embassies Attestation',
+      'Educational Documents Attestation',
+      'Special Documents',
+      'Translation of any embassy',
+    ]
+    return attestationServices.includes(formData.services)
+  }, [formData.product, formData.services])
+
   // Determine which document section to show based on selected service
   const getDocumentSectionInfo = () => {
     const service = formData.services || ''
+
+    // Handle attestation services with subservices
+    if (isAttestationService) {
+      return {
+        heading: `${service.toUpperCase()} SUBSERVICES`,
+        documentCount: selectedSubservices.length,
+        onOpen: () => onOpenSubservicesModal?.(),
+      }
+    }
 
     if (service === 'ATS - Doc MOFA Attestation' || service === 'ATR - Doc MOFA Home Delivery') {
       return {
@@ -328,12 +367,29 @@ export default function ShipmentDetails({
           {/* Total Amount Display */}
           <div className="mt-8 p-6 bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-100 rounded-xl">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider mb-1">Estimated Total</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black text-sky-900">PKR {parseFloat(formData.totalAmount || 0).toLocaleString()}</span>
                   <span className="text-sm text-sky-600 font-medium">(Incl. all charges)</span>
                 </div>
+                {/* Show subservices total if applicable */}
+                {isAttestationService && selectedSubservices && selectedSubservices.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-sky-200">
+                    <p className="text-xs text-gray-600">
+                      Subservices: <span className="font-semibold text-sky-700">
+                        PKR {(() => {
+                          const currentSubservices = subservicesData[formData.services] || []
+                          const total = selectedSubservices.reduce((sum, id) => {
+                            const subservice = currentSubservices.find((s) => s.id === id)
+                            return sum + (subservice ? subservice.price : 0)
+                          }, 0)
+                          return total.toLocaleString('en-PK')
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-500 mb-1">Chargeable Weight</p>

@@ -111,6 +111,7 @@ export default function CnAllocation() {
               <option value="OLE">OLE</option>
               <option value="Logistics">Logistics</option>
               <option value="Sentiments">Sentiments</option>
+              <option value="COD">COD</option>
             </select>
           </div>
 

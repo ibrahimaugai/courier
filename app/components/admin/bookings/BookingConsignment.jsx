@@ -9,6 +9,7 @@ import ShipmentDetails from './ShipmentDetails'
 import Shipper from './Shipper'
 import Consignee from './Consignee'
 import OtherAmountSection from './OtherAmountSection'
+import SubservicesModal from './SubservicesModal'
 
 export default function BookingConsignment() {
   const [showMofaModal, setShowMofaModal] = useState(false)
@@ -25,6 +26,9 @@ export default function BookingConsignment() {
   const [selectedIbccDocuments, setSelectedIbccDocuments] = useState([])
   const [showNationalBureauModal, setShowNationalBureauModal] = useState(false)
   const [selectedNationalBureauDocuments, setSelectedNationalBureauDocuments] = useState([])
+  const [showSubservicesModal, setShowSubservicesModal] = useState(false)
+  const [selectedSubservices, setSelectedSubservices] = useState([])
+  const [subservicesData, setSubservicesData] = useState({}) // Cache subservices by service name
   const [attestationInfo, setAttestationInfo] = useState({ days: null, addPageRate: null })
   const [cnAllocationError, setCnAllocationError] = useState('')
   const dispatch = useDispatch()
@@ -222,6 +226,18 @@ export default function BookingConsignment() {
     const pieces = parseInt(formData.pieces || '1')
     const { documents } = getSelectedDocuments()
     const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
+    
+    // Calculate subservices total for Attestation services
+    let subservicesTotal = 0
+    if (formData.product === 'Attestation' && selectedSubservices.length > 0 && formData.services) {
+      const currentSubservices = subservicesData[formData.services] || []
+      subservicesTotal = selectedSubservices.reduce((total, id) => {
+        const subservice = currentSubservices.find((s) => s.id === id)
+        return total + (subservice ? subservice.price : 0)
+      }, 0)
+    }
+    
+    // otherAmount is for manual entry, subservicesTotal is calculated from selected subservices
     const otherAmount = parseFloat(formData.otherAmount || '0')
 
     // Force numeric safety (prevent type coercion issues)
@@ -229,6 +245,7 @@ export default function BookingConsignment() {
     const pcs = Number(pieces) || 1
     const docTotal = Number(documentTotal) || 0
     const other = Number(otherAmount) || 0
+    const subservices = Number(subservicesTotal) || 0
 
     // Only calculate total if we have ALL required fields and a valid rate
     const hasRequiredFields = formData.product && formData.originCity && formData.destination && formData.services && formData.weight
@@ -238,7 +255,13 @@ export default function BookingConsignment() {
 
     if (hasRequiredFields && rate > 0) {
       finalRate = rate
-      totalAmount = (rate * pcs) + docTotal + other
+      totalAmount = (rate * pcs) + docTotal + other + subservices
+    } else if (formData.product === 'Attestation') {
+      // For Attestation, calculate total even without rate/weight/origin/destination
+      // Allow calculation if service is selected (even if no subservices selected yet)
+      if (formData.services) {
+        totalAmount = docTotal + other + subservices
+      }
     }
 
     setFormData(prev => ({
@@ -262,7 +285,9 @@ export default function BookingConsignment() {
     selectedBoardVerificationDocuments,
     selectedHecDocuments,
     selectedIbccDocuments,
-    selectedNationalBureauDocuments
+    selectedNationalBureauDocuments,
+    selectedSubservices,
+    subservicesData
   ])
 
   const handleInputChange = (e) => {
@@ -284,6 +309,36 @@ export default function BookingConsignment() {
   // Auto-open document modal when service requiring documents is selected
   useEffect(() => {
     const service = formData.services || ''
+    const product = formData.product || ''
+
+    // Handle Attestation product services - show subservices modal
+    if (product === 'Attestation' && service) {
+      const attestationServices = [
+        'NPS All Services',
+        'Embassies Attestation',
+        'Educational Documents Attestation',
+        'Special Documents',
+        'Translation of any embassy',
+      ]
+      if (attestationServices.includes(service)) {
+        // Fetch subservices if not already cached
+        if (!subservicesData[service]) {
+          api.getSubservices(service)
+            .then((data) => {
+              const subservices = Array.isArray(data) ? data : data?.data || []
+              setSubservicesData((prev) => ({
+                ...prev,
+                [service]: subservices,
+              }))
+            })
+            .catch((err) => {
+              console.error('Error fetching subservices:', err)
+            })
+        }
+        setShowSubservicesModal(true)
+        return
+      }
+    }
 
     // Only open modal if a document-requiring service is selected
     if (service === 'ATS - Doc MOFA Attestation' || service === 'ATR - Doc MOFA Home Delivery') {
@@ -301,7 +356,7 @@ export default function BookingConsignment() {
     } else if (service === 'National Bureau') {
       setShowNationalBureauModal(true)
     }
-  }, [formData.services])
+  }, [formData.services, formData.product])
 
   const handleOpenDocumentModal = (modalType) => {
     switch (modalType) {
@@ -867,6 +922,9 @@ export default function BookingConsignment() {
         cnAllocationError={cnAllocationError}
         cities={cities}
         services={reduxServices}
+        selectedSubservices={selectedSubservices}
+        onOpenSubservicesModal={() => setShowSubservicesModal(true)}
+        subservicesData={subservicesData}
       />
 
       {/* Shipper Section */}
@@ -1613,6 +1671,26 @@ export default function BookingConsignment() {
           </div>
         </div>
       )}
+
+      {/* Dynamic Subservices Modal for Attestation Services */}
+      <SubservicesModal
+        isOpen={showSubservicesModal}
+        onClose={() => setShowSubservicesModal(false)}
+        serviceName={formData.services}
+        selectedSubservices={selectedSubservices}
+        onSubservicesChange={(subservices) => {
+          setSelectedSubservices(subservices)
+          // The useEffect hook will automatically recalculate the total
+          // including subservices when selectedSubservices changes
+        }}
+        onSubservicesDataLoaded={(serviceName, subservices) => {
+          // Update subservicesData cache when modal loads subservices
+          setSubservicesData((prev) => ({
+            ...prev,
+            [serviceName]: subservices,
+          }))
+        }}
+      />
     </div>
   )
 }

@@ -125,6 +125,101 @@ export class PricingService {
     });
   }
 
+  async getSubservices(serviceName: string) {
+    // Map service category names to actual service categories in database
+    const categoryMapping: { [key: string]: string[] } = {
+      'NPS All Services': ['NPS'],
+      'Embassies Attestation': ['Embassy'],
+      'Educational Documents Attestation': ['Educational'],
+      'Special Documents': ['Special'],
+      'Translation of any embassy': ['Translation'],
+    };
+
+    const categories = categoryMapping[serviceName] || [];
+    
+    if (categories.length === 0) {
+      return [];
+    }
+
+    // Get all attestation services and filter by category
+    const allServices = await this.prisma.service.findMany({
+      where: {
+        serviceType: 'Attestation',
+        status: 'active',
+      },
+      include: {
+        pricingRules: {
+          where: {
+            status: 'active',
+          },
+          take: 1,
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+      orderBy: {
+        serviceName: 'asc',
+      },
+    });
+
+    // Filter services by category (checking service name patterns)
+    const subservices = allServices
+      .filter((service) => {
+        const serviceNameLower = service.serviceName.toLowerCase();
+        return categories.some((category) => {
+          const categoryLower = category.toLowerCase();
+          // Check if service name contains category keywords
+          if (categoryLower === 'nps') {
+            return (
+              serviceNameLower.includes('mofa general') ||
+              serviceNameLower.includes('apostille') ||
+              serviceNameLower.includes('national beuro') ||
+              serviceNameLower.includes('national bureau')
+            );
+          } else if (categoryLower === 'embassy') {
+            return (
+              serviceNameLower.includes('embassy') ||
+              serviceNameLower.includes('culture')
+            );
+          } else if (categoryLower === 'educational') {
+            return (
+              serviceNameLower.includes('hec') ||
+              serviceNameLower.includes('university') ||
+              serviceNameLower.includes('ibcc') ||
+              serviceNameLower.includes('board') ||
+              serviceNameLower.includes('borad') ||
+              serviceNameLower.includes('enquivalence')
+            );
+          } else if (categoryLower === 'special') {
+            return (
+              serviceNameLower.includes('marriage') ||
+              serviceNameLower.includes('divorce') ||
+              serviceNameLower.includes('stamp paper') ||
+              serviceNameLower.includes('commercial documents')
+            );
+          } else if (categoryLower === 'translation') {
+            return serviceNameLower.includes('translation');
+          }
+          return false;
+        });
+      })
+      .map((service) => {
+        const pricingRule = service.pricingRules[0];
+        return {
+          id: service.id,
+          name: service.serviceName,
+          price: pricingRule ? parseFloat(pricingRule.baseRate.toString()) : 0,
+          days: service.days,
+          additionalCharges: pricingRule?.additionalCharges
+            ? parseFloat(pricingRule.additionalCharges.toString())
+            : null,
+        };
+      });
+
+    return subservices;
+  }
+
   async createPricingRule(data: { originCityId: string; destinationCityId: string; serviceId: string; weightFrom: number; weightTo: number; baseRate: number }) {
     // 1. Create the primary rule
     const rule = await this.prisma.pricingRule.create({

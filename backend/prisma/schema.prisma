@@ -702,6 +702,7 @@ model PickupRequest {
   specialInstructions String?      @map("special_instructions")
   status              PickupStatus @default(REQUESTED)
   assignedRiderId     String?      @map("assigned_rider_id")
+  riderName           String?      @map("rider_name")
   
   createdBy           String       @map("created_by")
   createdAt           DateTime     @default(now()) @map("created_at")
@@ -726,6 +727,7 @@ enum BookingStatus {
   PENDING
   BOOKED
   PICKUP_REQUESTED
+  RIDER_ON_WAY
   AT_HUB
   IN_TRANSIT
   AT_DEPOT

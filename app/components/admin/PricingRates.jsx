@@ -7,7 +7,7 @@ import { fetchAllPricing } from '../../lib/store'
 import { Filter, RefreshCw, TrendingUp, MapPin, Package, Loader2, Pencil, X, Plus, Trash2, Settings2, CheckCircle, Search } from 'lucide-react'
 import AttestationPricingTable from './AttestationPricingTable'
 
-const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation']
+const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation', 'COD']
 
 const DEFAULT_WEIGHT_RANGES = [
   { from: 0, to: 0.5 },

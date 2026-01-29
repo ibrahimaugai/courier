@@ -17,7 +17,10 @@ export default function UserShipmentDetails({
   onFileChange,
   isReadOnly = false,
   cities = [],
-  services = [] // Accept services prop
+  services = [], // Accept services prop
+  selectedSubservices = [],
+  onOpenSubservicesModal,
+  subservicesData = {},
 }) {
   // Use all active cities (removed restrictive whitelist for consistency with admin)
   const activeCities = useMemo(() => {
@@ -97,9 +100,36 @@ export default function UserShipmentDetails({
 
   const documentSection = getDocumentSectionInfo()
 
+  // Check if current service is an attestation service that needs subservices
+  const isAttestationService = useMemo(() => {
+    if (formData.product !== 'Attestation' || !formData.services) return false
+    const attestationServices = [
+      'NPS All Services',
+      'Embassies Attestation',
+      'Educational Documents Attestation',
+      'Special Documents',
+      'Translation of any embassy',
+    ]
+    return attestationServices.includes(formData.services)
+  }, [formData.product, formData.services])
+
   // Get dynamic services based on selected product from database
   const availableServices = useMemo(() => {
-    if (!services || !Array.isArray(services) || !formData.product) return []
+    if (!formData.product) return []
+    
+    // For Attestation product, show category services instead of individual services
+    if (formData.product === 'Attestation') {
+      return [
+        { value: 'NPS All Services', label: 'NPS All Services' },
+        { value: 'Embassies Attestation', label: 'Embassies Attestation' },
+        { value: 'Educational Documents Attestation', label: 'Educational Documents Attestation' },
+        { value: 'Special Documents', label: 'Special Documents' },
+        { value: 'Translation of any embassy', label: 'Translation of any embassy' },
+      ]
+    }
+    
+    // For other products, use services from database
+    if (!services || !Array.isArray(services)) return []
     const allForProduct = services.filter(s => s && s.serviceType === formData.product)
     const filtered = allForProduct.filter(s => !s.status || s.status.toLowerCase() === 'active')
 
@@ -141,6 +171,7 @@ export default function UserShipmentDetails({
                 <option value="Logistics">Logistics</option>
                 <option value="Sentiments">Sentiments</option>
                 <option value="Attestation">Attestation</option>
+                <option value="COD">COD</option>
               </select>
             </div>
 
@@ -343,6 +374,23 @@ export default function UserShipmentDetails({
                 <span className="text-3xl font-black text-sky-900">PKR {parseFloat(formData.totalAmount || 0).toLocaleString()}</span>
                 <span className="text-sm text-sky-600 font-medium">(Incl. all charges)</span>
               </div>
+              {/* Show subservices total if applicable */}
+              {isAttestationService && selectedSubservices && selectedSubservices.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-sky-200">
+                  <p className="text-xs text-gray-600">
+                    Subservices: <span className="font-semibold text-sky-700">
+                      PKR {(() => {
+                        const currentSubservices = subservicesData[formData.services] || []
+                        const total = selectedSubservices.reduce((sum, id) => {
+                          const subservice = currentSubservices.find((s) => s.id === id)
+                          return sum + (subservice ? subservice.price : 0)
+                        }, 0)
+                        return total.toLocaleString('en-PK')
+                      })()}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-500 mb-1">Chargeable Weight</p>
@@ -352,6 +400,31 @@ export default function UserShipmentDetails({
             </div>
           </div>
         </div>
+
+        {/* Attestation Subservices Section */}
+        {isAttestationService && (
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-sky-600">Attestation Subservices</h3>
+                <span className="text-sm text-gray-600">
+                  {selectedSubservices && selectedSubservices.length > 0
+                    ? `${selectedSubservices.length} subservice${selectedSubservices.length > 1 ? 's' : ''} selected`
+                    : 'No subservices selected'}
+                </span>
+              </div>
+              {!isReadOnly && onOpenSubservicesModal && (
+                <button
+                  type="button"
+                  onClick={onOpenSubservicesModal}
+                  className="px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition-colors font-medium"
+                >
+                  {selectedSubservices && selectedSubservices.length > 0 ? 'Edit Subservices' : 'Select Subservices'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Document Selection Section */}
         {documentSection && (

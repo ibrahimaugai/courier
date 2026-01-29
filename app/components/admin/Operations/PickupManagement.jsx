@@ -28,27 +28,17 @@ export default function PickupManagement() {
   const [assignModal, setAssignModal] = useState({ isOpen: false, pickup: null })
   const [statusModal, setStatusModal] = useState({ isOpen: false, pickup: null, newStatus: '' })
   const [detailModal, setDetailModal] = useState({ isOpen: false, pickup: null })
-  const [riders, setRiders] = useState([])
-  const [selectedRiderId, setSelectedRiderId] = useState('')
+  const [riderName, setRiderName] = useState('')
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
 
   useEffect(() => {
     loadPickups()
-    fetchRiders()
   }, [])
 
   const loadPickups = () => {
     dispatch(fetchAllPickups(filters))
   }
 
-  const fetchRiders = async () => {
-    try {
-      const data = await api.getManifestDrivers()
-      setRiders(data)
-    } catch (err) {
-      console.error('Failed to fetch riders', err)
-    }
-  }
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
@@ -61,21 +51,25 @@ export default function PickupManagement() {
 
   const handleAssignRider = (pickup) => {
     setAssignModal({ isOpen: true, pickup })
-    setSelectedRiderId(pickup.assignedRiderId || '')
+    setRiderName(pickup.riderName || '')
   }
 
   const handleConfirmAssign = async () => {
-    if (!selectedRiderId) return
+    if (!riderName || !riderName.trim()) {
+      setToast({ isVisible: true, message: 'Please enter rider name', type: 'error' })
+      return
+    }
 
     const result = await dispatch(updatePickupStatus({
       id: assignModal.pickup.id,
       status: 'ASSIGNED',
-      riderId: selectedRiderId
+      riderName: riderName.trim()
     }))
 
     if (updatePickupStatus.fulfilled.match(result)) {
       setToast({ isVisible: true, message: 'Rider assigned successfully!', type: 'success' })
       setAssignModal({ isOpen: false, pickup: null })
+      setRiderName('')
       loadPickups()
     }
   }
@@ -285,14 +279,16 @@ export default function PickupManagement() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {pickup.assignedRider ? (
+                        {pickup.riderName || (pickup.assignedRider && pickup.assignedRider.name) ? (
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 text-xs font-bold border border-sky-200">
-                              {pickup.assignedRider.name.charAt(0)}
+                              {(pickup.riderName || pickup.assignedRider?.name || '').charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div className="text-sm font-bold text-slate-900">{pickup.assignedRider.name}</div>
-                              <div className="text-[11px] text-slate-500 font-medium">{pickup.assignedRider.phone}</div>
+                              <div className="text-sm font-bold text-slate-900">{pickup.riderName || pickup.assignedRider?.name}</div>
+                              {pickup.assignedRider?.phone && (
+                                <div className="text-[11px] text-slate-500 font-medium">{pickup.assignedRider.phone}</div>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -301,7 +297,7 @@ export default function PickupManagement() {
                             className="px-3 py-1.5 bg-white text-sky-600 rounded-lg text-[11px] font-bold border border-sky-100 hover:bg-sky-50 transition-all flex items-center gap-1.5 shadow-sm"
                           >
                             <User className="w-3 h-3" />
-                            Assign
+                            Assign Rider
                           </button>
                         )}
                       </td>
@@ -383,60 +379,55 @@ export default function PickupManagement() {
       {/* Assign Rider Modal */}
       {assignModal.isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAssignModal({ isOpen: false, pickup: null })} />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => {
+            setAssignModal({ isOpen: false, pickup: null })
+            setRiderName('')
+          }} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Truck className="w-6 h-6 text-sky-600" />
-                Dispatch Rider
+                Assign Rider
               </h3>
               <p className="text-sm text-slate-500 mt-1 uppercase tracking-tighter font-bold">CN: {assignModal.pickup.booking?.cnNumber}</p>
             </div>
             <div className="p-6 space-y-4">
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {riders.map((rider) => (
-                  <div
-                    key={rider.id}
-                    onClick={() => setSelectedRiderId(rider.id)}
-                    className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedRiderId === rider.id
-                      ? 'border-sky-500 bg-sky-50 shadow-md'
-                      : 'border-slate-100 hover:border-slate-300'
-                      }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl border ${selectedRiderId === rider.id ? 'bg-sky-600 text-white border-sky-700' : 'bg-slate-50 text-slate-400 border-slate-200'
-                        }`}>
-                        {rider.name.charAt(0)}
-                      </div>
-                      <div>
-                        <div className={`font-bold text-base ${selectedRiderId === rider.id ? 'text-sky-900' : 'text-slate-900'}`}>
-                          {rider.name}
-                        </div>
-                        <div className="text-xs text-slate-500 font-medium">{rider.phone}</div>
-                      </div>
-                    </div>
-                    {selectedRiderId === rider.id && (
-                      <div className="bg-sky-600 rounded-full p-1.5 shadow-lg">
-                        <CheckCircle className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Rider Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={riderName}
+                  onChange={(e) => setRiderName(e.target.value)}
+                  placeholder="Enter rider name"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none text-sm font-medium"
+                  autoFocus
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && riderName.trim()) {
+                      handleConfirmAssign()
+                    }
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">Enter the name of the rider assigned to this pickup</p>
               </div>
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
               <button
-                onClick={() => setAssignModal({ isOpen: false, pickup: null })}
+                onClick={() => {
+                  setAssignModal({ isOpen: false, pickup: null })
+                  setRiderName('')
+                }}
                 className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-colors"
               >
                 Cancel
               </button>
               <button
-                disabled={!selectedRiderId || isLoading}
+                disabled={!riderName || !riderName.trim() || isLoading}
                 onClick={handleConfirmAssign}
                 className="flex-1 px-4 py-3 bg-sky-600 text-white rounded-xl font-bold hover:bg-sky-700 transition-all shadow-lg shadow-sky-200 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Dispatch'}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Assign Rider'}
               </button>
             </div>
           </div>
@@ -509,19 +500,21 @@ export default function PickupManagement() {
               </div>
 
               {/* Rider Section */}
-              {detailModal.pickup.assignedRider && (
+              {(detailModal.pickup.riderName || detailModal.pickup.assignedRider) && (
                 <div className="space-y-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Contacted Rider</h3>
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Assigned Rider</h3>
                   <div className="flex items-center gap-4 p-4 bg-sky-50/50 rounded-2xl border border-sky-100">
                     <div className="w-14 h-14 rounded-full bg-sky-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-sky-100">
-                      {detailModal.pickup.assignedRider.name.charAt(0)}
+                      {(detailModal.pickup.riderName || detailModal.pickup.assignedRider?.name || '').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="text-lg font-black text-slate-900">{detailModal.pickup.assignedRider.name}</div>
-                      <div className="text-sm text-sky-600 font-bold flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5" />
-                        {detailModal.pickup.assignedRider.phone}
-                      </div>
+                      <div className="text-lg font-black text-slate-900">{detailModal.pickup.riderName || detailModal.pickup.assignedRider?.name}</div>
+                      {detailModal.pickup.assignedRider?.phone && (
+                        <div className="text-sm text-sky-600 font-bold flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5" />
+                          {detailModal.pickup.assignedRider.phone}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

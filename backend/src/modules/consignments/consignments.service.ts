@@ -364,25 +364,22 @@ export class ConsignmentsService {
         tx,
       );
 
-      // Generate CN number if not provided (Admins only)
+      // Generate CN number automatically for all bookings (admin and customer)
       let cnNumber = createConsignmentDto.cnNumber;
-      const finalStatus = isAdmin ? BookingStatus.BOOKED : BookingStatus.PENDING;
+      // Auto-approve all bookings (both admin and customer)
+      const finalStatus = BookingStatus.BOOKED;
 
-      if (isAdmin) {
-        if (!cnNumber) {
-          cnNumber = await CnGenerator.generate(tx);
-        } else {
-          // Check if CN number already exists
-          const existingBooking = await tx.booking.findUnique({
-            where: { cnNumber },
-          });
-          if (existingBooking) {
-            throw new BadRequestException(`CN number ${cnNumber} already exists`);
-          }
-        }
+      if (!cnNumber) {
+        // Auto-generate CN number for all bookings
+        cnNumber = await CnGenerator.generate(tx);
       } else {
-        // For regular users, CN remains null until approval
-        cnNumber = null;
+        // Check if CN number already exists
+        const existingBooking = await tx.booking.findUnique({
+          where: { cnNumber },
+        });
+        if (existingBooking) {
+          throw new BadRequestException(`CN number ${cnNumber} already exists`);
+        }
       }
 
       // Upload documents if provided
@@ -428,14 +425,21 @@ export class ConsignmentsService {
           ? volumetricWeight
           : createConsignmentDto.weight;
 
-      // 5. Handle Batch - Auto-assign or Create if missing (Only for Booked consignments)
+      // 5. Handle Batch - Auto-assign or Create if missing (only for admin bookings)
       let batchId = createConsignmentDto.batchId;
       let batchCode = createConsignmentDto.batchCode;
 
-      if (finalStatus === BookingStatus.BOOKED && !batchId) {
-        const activeBatch = await this.batchesService.ensureActiveBatch(createdBy, tx);
-        batchId = activeBatch.id;
-        batchCode = activeBatch.batchCode;
+      if (!batchId) {
+        // Only auto-assign batch for admin bookings (customers don't need batches)
+        if (isAdmin) {
+          const activeBatch = await this.batchesService.ensureActiveBatch(createdBy, tx);
+          batchId = activeBatch.id;
+          batchCode = activeBatch.batchCode;
+        } else {
+          // For customer bookings, set batch to null (no batch required)
+          batchId = null;
+          batchCode = null;
+        }
       }
 
       // Create booking
@@ -508,7 +512,7 @@ export class ConsignmentsService {
           action: 'CREATED',
           newStatus: finalStatus,
           performedBy: createdBy,
-          remarks: isAdmin ? 'Booking created via admin panel' : 'Booking request created by user',
+          remarks: isAdmin ? 'Booking created via admin panel' : 'Booking created and auto-approved by customer',
         },
       });
 

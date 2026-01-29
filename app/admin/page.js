@@ -113,8 +113,6 @@ export default function AdminPanel() {
         return <Configuration />
       case 'CN Allocation':
         return <CnAllocation />
-      case 'Booking Requests':
-        return <BookingRequests />
       case 'Edit Booking':
         return <EditBooking />
       case 'Employee Registration':

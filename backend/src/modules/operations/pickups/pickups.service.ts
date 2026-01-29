@@ -170,9 +170,25 @@ export class PickupsService {
         }
     }
 
-    async updateStatus(id: string, status: PickupStatus, riderId?: string) {
+    async updateStatus(id: string, status: PickupStatus, riderId?: string, riderName?: string) {
         const data: any = { status };
         if (riderId) data.assignedRiderId = riderId;
+        if (riderName) data.riderName = riderName;
+
+        // Update booking status to RIDER_ON_WAY when rider is assigned
+        if (status === 'ASSIGNED' && (riderId || riderName)) {
+            const pickup = await this.prisma.pickupRequest.findUnique({
+                where: { id },
+                select: { bookingId: true }
+            });
+
+            if (pickup) {
+                await this.prisma.booking.update({
+                    where: { id: pickup.bookingId },
+                    data: { status: 'RIDER_ON_WAY' }
+                });
+            }
+        }
 
         return this.prisma.pickupRequest.update({
             where: { id },

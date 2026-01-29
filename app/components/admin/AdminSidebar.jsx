@@ -39,7 +39,6 @@ export default function AdminSidebar({ activePage, setActivePage }) {
 
   const bookingsSubItems = [
     { name: 'Booking', icon: Package, shortcut: 'BKG' },
-    { name: 'Booking Requests', icon: FileText, shortcut: 'REQ' },
     { name: 'CN Allocation', icon: FileText, shortcut: 'ALC' },
     { name: 'CN Reprint', icon: Printer, shortcut: 'RPT' },
     { name: 'Edit Booking', icon: Edit, shortcut: 'EDT' },
