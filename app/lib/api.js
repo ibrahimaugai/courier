@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000/api/v1'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://operations.nps.com.pk/api/v1'
 
 /**
  * API utility functions
@@ -771,13 +771,10 @@ export const api = {
     return this.handleResponse(response)
   },
 
-  async updatePickupStatus(id, status, riderId, riderName) {
-    const body = { status }
-    if (riderId) body.riderId = riderId
-    if (riderName) body.riderName = riderName
+  async updatePickupStatus(id, status, riderId) {
     const response = await this.request(`/pickups/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ status, riderId }),
     })
     return this.handleResponse(response)
   },
@@ -826,18 +823,6 @@ export const api = {
    */
   async getServices() {
     const response = await this.request('/pricing/services', {
-      method: 'GET',
-    })
-    return this.handleResponse(response)
-  },
-
-  /**
-   * Get subservices for a given service category
-   * @param {string} serviceName - Service category name (e.g., 'NPS All Services')
-   * @returns {Promise<Array>} - Array of subservices
-   */
-  async getSubservices(serviceName) {
-    const response = await this.request(`/pricing/subservices?serviceName=${encodeURIComponent(serviceName)}`, {
       method: 'GET',
     })
     return this.handleResponse(response)
