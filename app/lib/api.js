@@ -829,6 +829,18 @@ export const api = {
   },
 
   /**
+   * Get subservices for a given service category
+   * @param {string} serviceName - Service category name (e.g., 'NPS All Services')
+   * @returns {Promise<Array>} - List of subservices
+   */
+  async getSubservices(serviceName) {
+    const response = await this.request(`/pricing/subservices?serviceName=${encodeURIComponent(serviceName)}`, {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
    * Create a new pricing rule
    * @param {object} data - Rule data
    * @returns {Promise<object>} - Created rule
