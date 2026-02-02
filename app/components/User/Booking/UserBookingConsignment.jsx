@@ -89,6 +89,18 @@ export default function UserBookingConsignment() {
       if (name === 'product') {
         updated.services = ''
       }
+      // When selecting a Blue Box Xkg service, auto-set weight and volumetric weight to X (locked)
+      if (name === 'services' && value) {
+        if (value.match(/^Blue Box (\d+)kg$/)) {
+          const kg = RegExp.$1
+          updated.weight = kg
+          updated.volumetricWeight = kg
+        } else {
+          // Switching to L-Flayer, Over Night, On Time Service, etc. — clear weight fields
+          updated.weight = ''
+          updated.volumetricWeight = ''
+        }
+      }
       return updated
     })
   }
@@ -175,6 +187,11 @@ export default function UserBookingConsignment() {
       const volWeight = parseFloat(volumetricWeight) || 0
       const applicableWeight = Math.max(physicalWeight, volWeight)
 
+      // For "Blue Box Xkg" services, use service "Blue Box" and weight X for pricing
+      const blueBoxKgMatch = services && String(services).match(/^Blue Box (\d+)kg$/)
+      const effectiveService = blueBoxKgMatch ? 'Blue Box' : services
+      const effectiveWeight = blueBoxKgMatch ? parseFloat(blueBoxKgMatch[1]) : applicableWeight
+
       // 2. Find matching rules
       let applicableRules = []
 
@@ -188,16 +205,17 @@ export default function UserBookingConsignment() {
         applicableRules = reduxRules.filter(r =>
           r.originCityId === originCity &&
           r.destinationCityId === destination &&
-          r.service?.serviceName === services
+          r.service?.serviceName === effectiveService
         )
       }
 
       if (applicableRules.length === 0) return 0
 
-      // 3. Find exact weight tier match
+      // 3. Find exact weight tier match (use effectiveWeight for Blue Box Xkg)
+      const weightForTier = effectiveService === 'Blue Box' && blueBoxKgMatch ? effectiveWeight : applicableWeight
       const matchingRule = applicableRules.find(r =>
-        applicableWeight >= parseFloat(r.weightFrom) &&
-        applicableWeight <= parseFloat(r.weightTo)
+        weightForTier >= parseFloat(r.weightFrom) &&
+        weightForTier <= parseFloat(r.weightTo)
       )
 
       if (matchingRule) {
@@ -675,9 +693,12 @@ export default function UserBookingConsignment() {
     try {
       const { documents, documentServiceType } = getSelectedDocuments()
 
+      // For "Blue Box Xkg" services, send service "Blue Box" so backend resolves correctly; weight is already set
+      const effectiveServiceId = formData.services && formData.services.match(/^Blue Box (\d+)kg$/) ? 'Blue Box' : formData.services
+
       const bookingData = {
         productId: formData.product,
-        serviceId: formData.services,
+        serviceId: effectiveServiceId,
         destinationCityId: formData.destination,
         originCityId: formData.originCity,
         pieces: parseInt(formData.pieces || '1'),

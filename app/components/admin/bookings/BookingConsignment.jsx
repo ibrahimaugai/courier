@@ -126,6 +126,11 @@ export default function BookingConsignment() {
 
       if (applicableWeight <= 0) return 0
 
+      // For "Blue Box Xkg" services, use service "Blue Box" and weight X for pricing
+      const blueBoxKgMatch = formData.services && String(formData.services).match(/^Blue Box (\d+)kg$/)
+      const effectiveService = blueBoxKgMatch ? 'Blue Box' : formData.services
+      const effectiveWeight = blueBoxKgMatch ? parseFloat(blueBoxKgMatch[1]) : applicableWeight
+
       // Find all rules matching the route and service
       let applicableRules = []
 
@@ -192,20 +197,21 @@ export default function BookingConsignment() {
           if (attestationInfo.days !== null) setAttestationInfo({ days: null, addPageRate: null })
         }
       } else {
-        // Regular logic for other products
+        // Regular logic for other products (use effectiveService for Blue Box Xkg)
         applicableRules = reduxRules.filter(rule =>
           rule.originCityId === formData.originCity &&
           rule.destinationCityId === formData.destination &&
-          rule.service?.serviceName === formData.services
+          rule.service?.serviceName === effectiveService
         )
       }
 
       if (applicableRules.length === 0) return 0
 
-      // Try to find exact weight tier match (using >= for lower bound - industry standard)
+      // Try to find exact weight tier match (use effectiveWeight for Blue Box Xkg)
+      const weightForTier = effectiveService === 'Blue Box' && blueBoxKgMatch ? effectiveWeight : applicableWeight
       const matchingRule = applicableRules.find(rule =>
-        applicableWeight >= parseFloat(rule.weightFrom) &&
-        applicableWeight <= parseFloat(rule.weightTo)
+        weightForTier >= parseFloat(rule.weightFrom) &&
+        weightForTier <= parseFloat(rule.weightTo)
       )
 
       if (matchingRule) {
@@ -301,6 +307,18 @@ export default function BookingConsignment() {
       if (name === 'product') {
         updated.services = ''
         updated.otherAmount = ''  // Clear other amount on product change
+      }
+      // When selecting a Blue Box Xkg service, auto-set weight and volumetric weight to X (locked)
+      if (name === 'services' && value) {
+        if (value.match(/^Blue Box (\d+)kg$/)) {
+          const kg = RegExp.$1
+          updated.weight = kg
+          updated.volumetricWeight = kg
+        } else {
+          // Switching to L-Flayer, Over Night, On Time Service, etc. — clear weight fields
+          updated.weight = ''
+          updated.volumetricWeight = ''
+        }
       }
       return updated
     })
@@ -754,11 +772,14 @@ export default function BookingConsignment() {
       // Determine chargeable weight
       const chargeableWeight = Math.max(parseFloat(formData.weight || '0'), parseFloat(formData.volumetricWeight || '0'))
 
+      // For "Blue Box Xkg" services, send service "Blue Box" so backend resolves correctly
+      const effectiveServiceId = formData.services && formData.services.match(/^Blue Box (\d+)kg$/) ? 'Blue Box' : formData.services
+
       // Map form data to API format
       const bookingData = {
         // Product & Service - use names/codes (backend will resolve to IDs)
         productId: formData.product, // e.g., "General"
-        serviceId: formData.services, // e.g., "ATS - Doc MOFA Attestation"
+        serviceId: effectiveServiceId,
         destinationCityId: formData.destination, // e.g., "LHE - Lahore"
         originCityId: formData.originCity,
 

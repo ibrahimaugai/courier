@@ -2,6 +2,14 @@
 
 import React, { useMemo } from 'react'
 
+// Blue Box weight-tier services: 1kg–10kg, then 15, 20, 25kg. "Blue Box" (generic) is excluded from the list.
+const BLUE_BOX_WEIGHT_SERVICES = [
+  ...Array.from({ length: 10 }, (_, i) => `Blue Box ${i + 1}kg`),
+  'Blue Box 15kg',
+  'Blue Box 20kg',
+  'Blue Box 25kg',
+]
+
 export default function UserShipmentDetails({
   formData,
   handleInputChange,
@@ -128,6 +136,17 @@ export default function UserShipmentDetails({
       ]
     }
     
+    // For General product: exclude "Blue Box" and add Blue Box 1kg–10kg, 15kg, 20kg, 25kg (ordered by weight)
+    if (formData.product === 'General') {
+      const fromDb = (services || [])
+        .filter(s => s && s.serviceType === 'General' && (!s.status || s.status.toLowerCase() === 'active'))
+        .map(s => ({ value: s.serviceName, label: s.serviceName }))
+        .filter(s => s.value !== 'Blue Box') // remove generic Blue Box
+        .sort((a, b) => a.label.localeCompare(b.label))
+      const blueBoxOptions = BLUE_BOX_WEIGHT_SERVICES.map(name => ({ value: name, label: name }))
+      return [...fromDb, ...blueBoxOptions] // Blue Box options already in weight order (1–10, 15, 20, 25)
+    }
+    
     // For other products, use services from database
     if (!services || !Array.isArray(services)) return []
     const allForProduct = services.filter(s => s && s.serviceType === formData.product)
@@ -138,6 +157,11 @@ export default function UserShipmentDetails({
       .map(s => ({ value: s.serviceName, label: s.serviceName }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [services, formData.product])
+
+  // When a Blue Box Xkg service is selected, weight and volumetric weight are locked to X kg
+  const blueBoxWeightMatch = formData.services && formData.services.match(/^Blue Box (\d+)kg$/)
+  const isWeightLockedForBlueBox = Boolean(blueBoxWeightMatch)
+  const lockedWeightKg = blueBoxWeightMatch ? blueBoxWeightMatch[1] : ''
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
@@ -338,12 +362,16 @@ export default function UserShipmentDetails({
               <input
                 type="number"
                 name="volumetricWeight"
-                value={formData.volumetricWeight}
+                value={isWeightLockedForBlueBox ? lockedWeightKg : formData.volumetricWeight}
                 onChange={handleInputChange}
                 placeholder="0"
-                disabled={isReadOnly}
+                disabled={isReadOnly || isWeightLockedForBlueBox}
+                readOnly={isWeightLockedForBlueBox}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors disabled:bg-gray-100"
               />
+              {isWeightLockedForBlueBox && (
+                <p className="mt-1 text-xs text-sky-600">Set by selected service (Blue Box {lockedWeightKg}kg)</p>
+              )}
             </div>
 
             {/* Weight/Kg */}
@@ -354,13 +382,17 @@ export default function UserShipmentDetails({
               <input
                 type="number"
                 name="weight"
-                value={formData.weight}
+                value={isWeightLockedForBlueBox ? lockedWeightKg : formData.weight}
                 onChange={handleInputChange}
                 required
                 placeholder="Enter weight"
-                disabled={isReadOnly}
+                disabled={isReadOnly || isWeightLockedForBlueBox}
+                readOnly={isWeightLockedForBlueBox}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors disabled:bg-gray-100"
               />
+              {isWeightLockedForBlueBox && (
+                <p className="mt-1 text-xs text-sky-600">Set by selected service (Blue Box {lockedWeightKg}kg)</p>
+              )}
             </div>
           </div>
         </div>
