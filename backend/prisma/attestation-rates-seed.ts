@@ -109,10 +109,10 @@ async function main() {
         });
 
         if (existingRule) {
-            // Update existing service (ensure days are updated)
+            // Update existing service (ensure days and attestationCategory are updated)
             await prisma.service.update({
                 where: { id: existingRule.service.id },
-                data: { days: service.days }
+                data: { days: service.days, attestationCategory: service.category }
             });
 
             // Update existing rule
@@ -133,6 +133,7 @@ async function main() {
                     serviceType: 'Attestation',
                     serviceName: service.name,
                     days: service.days,
+                    attestationCategory: service.category,
                     status: 'active'
                 }
             });

@@ -83,8 +83,19 @@ export class PricingController {
 
   @Post('services')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Create a new service' })
-  async createService(@Body() data: { serviceName: string; serviceType: string; serviceCode?: string }) {
+  @ApiOperation({ summary: 'Create a new service (or attestation subservice with category + rate)' })
+  async createService(
+    @Body()
+    data: {
+      serviceName: string;
+      serviceType: string;
+      serviceCode?: string;
+      days?: string;
+      attestationCategory?: string;
+      baseRate?: number;
+      additionalCharges?: number;
+    },
+  ) {
     return await this.pricingService.createService(data);
   }
 
@@ -93,7 +104,14 @@ export class PricingController {
   @ApiOperation({ summary: 'Update a service' })
   async updateService(
     @Param('id') id: string,
-    @Body() data: { serviceName?: string; serviceType?: string; status?: string }
+    @Body()
+    data: {
+      serviceName?: string;
+      serviceType?: string;
+      days?: string;
+      attestationCategory?: string;
+      status?: string;
+    },
   ) {
     return await this.pricingService.updateService(id, data);
   }

@@ -117,6 +117,7 @@ export class PricingService {
         serviceName: true,
         serviceType: true,
         days: true,
+        attestationCategory: true,
         status: true,
       },
       orderBy: {
@@ -163,13 +164,17 @@ export class PricingService {
       },
     });
 
-    // Filter services by category (checking service name patterns)
+    // Prefer attestationCategory when set; fall back to name patterns for backward compatibility
     const subservices = allServices
       .filter((service) => {
+        if (service.attestationCategory) {
+          return categories.some(
+            (cat) => cat.toLowerCase() === service.attestationCategory?.toLowerCase()
+          );
+        }
         const serviceNameLower = service.serviceName.toLowerCase();
         return categories.some((category) => {
           const categoryLower = category.toLowerCase();
-          // Check if service name contains category keywords
           if (categoryLower === 'nps') {
             return (
               serviceNameLower.includes('mofa general') ||
@@ -306,14 +311,56 @@ export class PricingService {
   // SERVICE MANAGEMENT
   // ============================================
 
-  async createService(data: { serviceName: string; serviceType: string; serviceCode?: string }) {
-    const serviceCode = data.serviceCode || data.serviceName.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 100);
-    return await this.prisma.service.create({
+  async createService(data: {
+    serviceName: string;
+    serviceType: string;
+    serviceCode?: string;
+    days?: string;
+    attestationCategory?: string;
+    baseRate?: number;
+    additionalCharges?: number;
+  }) {
+    const { baseRate, additionalCharges, ...rest } = data;
+    const serviceCode =
+      data.serviceCode ||
+      (data.serviceType === 'Attestation' && data.attestationCategory
+        ? `ATT-${data.attestationCategory.substring(0, 3).toUpperCase()}-${Date.now().toString(36)}`
+        : data.serviceName.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 100));
+    const service = await this.prisma.service.create({
       data: {
-        ...data,
+        ...rest,
         serviceCode,
+        days: data.days ?? undefined,
+        attestationCategory: data.attestationCategory ?? undefined,
       },
     });
+    // For Attestation subservices: create default pricing rule (0–999 kg, one city) when baseRate provided
+    if (
+      data.serviceType === 'Attestation' &&
+      (data.baseRate !== undefined || data.baseRate === 0)
+    ) {
+      const defaultCity = await this.prisma.city.findFirst({
+        where: { status: 'active' },
+        select: { id: true },
+      });
+      if (defaultCity) {
+        await this.prisma.pricingRule.create({
+          data: {
+            originCityId: defaultCity.id,
+            destinationCityId: defaultCity.id,
+            serviceId: service.id,
+            weightFrom: 0,
+            weightTo: 999,
+            ratePerKg: 0,
+            baseRate: data.baseRate ?? 0,
+            additionalCharges: data.additionalCharges ?? null,
+            status: 'active',
+            effectiveFrom: new Date(),
+          },
+        });
+      }
+    }
+    return service;
   }
 
   async updateService(id: string, data: any) {

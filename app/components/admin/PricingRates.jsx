@@ -9,6 +9,45 @@ import AttestationPricingTable from './AttestationPricingTable'
 
 const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation', 'COD']
 
+// Attestation: booking shows these as "Services" (categories); subservices are the items in the modal.
+const ATTESTATION_CATEGORIES = [
+  { display: 'NPS All Services', key: 'NPS' },
+  { display: 'Embassies Attestation', key: 'Embassy' },
+  { display: 'Educational Documents Attestation', key: 'Educational' },
+  { display: 'Special Documents', key: 'Special' },
+  { display: 'Translation of any embassy', key: 'Translation' },
+]
+
+// Infer attestation category from service name (same logic as backend getSubservices) for services without attestationCategory
+function inferAttestationCategory(service) {
+  const stored = (service.attestationCategory || '').trim()
+  if (stored) return stored
+  const name = (service.serviceName || '').toLowerCase()
+  if (
+    name.includes('mofa general') ||
+    name.includes('apostille') ||
+    name.includes('national beuro') ||
+    name.includes('national bureau')
+  ) return 'NPS'
+  if (name.includes('embassy') || name.includes('culture')) return 'Embassy'
+  if (
+    name.includes('hec') ||
+    name.includes('university') ||
+    name.includes('ibcc') ||
+    name.includes('board') ||
+    name.includes('borad') ||
+    name.includes('enquivalence')
+  ) return 'Educational'
+  if (
+    name.includes('marriage') ||
+    name.includes('divorce') ||
+    name.includes('stamp paper') ||
+    name.includes('commercial documents')
+  ) return 'Special'
+  if (name.includes('translation')) return 'Translation'
+  return null
+}
+
 const DEFAULT_WEIGHT_RANGES = [
   { from: 0, to: 0.5 },
   { from: 0.5, to: 1 },
@@ -64,6 +103,13 @@ export default function PricingRates() {
   // Service Management State
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [newService, setNewService] = useState({ serviceName: '', serviceType: 'General' })
+  const [newSubservice, setNewSubservice] = useState({
+    attestationCategory: 'NPS',
+    serviceName: '',
+    days: '',
+    baseRate: '',
+    additionalCharges: '',
+  })
   const [isServiceSubmitting, setIsServiceSubmitting] = useState(false)
 
   // City Management State
@@ -324,10 +370,45 @@ export default function PricingRates() {
       await api.createService(newService)
       setNewService({ serviceName: '', serviceType: filters.serviceType || 'General' })
       dispatch(fetchAllPricing())
-      // Keep modal open if needed or close it
     } catch (err) {
       console.error('Error creating service:', err)
       alert(err.message || 'Failed to create service')
+    } finally {
+      setIsServiceSubmitting(false)
+    }
+  }
+
+  const handleCreateAttestationSubservice = async (e) => {
+    e.preventDefault()
+    const name = (newSubservice.serviceName || '').trim()
+    const baseRate = newSubservice.baseRate !== '' && newSubservice.baseRate !== null ? Number(newSubservice.baseRate) : null
+    if (!name) return
+    if (baseRate === null || baseRate === undefined || isNaN(baseRate)) {
+      alert('Please enter a valid base rate (PKR) for the subservice.')
+      return
+    }
+
+    try {
+      setIsServiceSubmitting(true)
+      await api.createService({
+        serviceType: 'Attestation',
+        serviceName: name,
+        attestationCategory: newSubservice.attestationCategory,
+        days: (newSubservice.days || '').trim() || undefined,
+        baseRate: Number(baseRate),
+        additionalCharges: newSubservice.additionalCharges !== '' && newSubservice.additionalCharges != null && !isNaN(Number(newSubservice.additionalCharges)) ? Number(newSubservice.additionalCharges) : undefined,
+      })
+      setNewSubservice({
+        attestationCategory: newSubservice.attestationCategory,
+        serviceName: '',
+        days: '',
+        baseRate: '',
+        additionalCharges: '',
+      })
+      dispatch(fetchAllPricing())
+    } catch (err) {
+      console.error('Error creating attestation subservice:', err)
+      alert(err.message || 'Failed to create subservice')
     } finally {
       setIsServiceSubmitting(false)
     }
@@ -638,53 +719,155 @@ export default function PricingRates() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Left: Add New Service */}
+              {/* Left: Add New Service or Attestation Subservice */}
               <div className="space-y-6">
-                <div className="bg-sky-50 p-6 rounded-xl border border-sky-100">
-                  <h3 className="text-sm font-black text-sky-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add New Service
-                  </h3>
-                  <form onSubmit={handleCreateService} className="space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service Type (Product)</label>
-                      <select
-                        required
-                        value={newService.serviceType}
-                        onChange={e => setNewService(s => ({ ...s, serviceType: e.target.value }))}
-                        className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                {newService.serviceType === 'Attestation' ? (
+                  <>
+                    <div className="bg-sky-50 p-6 rounded-xl border border-sky-100">
+                      <h3 className="text-sm font-black text-sky-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Add Attestation Subservice
+                      </h3>
+                      <p className="text-xs text-sky-700 mb-4">
+                        Attestation uses <strong>Services</strong> (categories in booking) and <strong>Subservices</strong> (items in the modal). Add subservices under a category below.
+                      </p>
+                      <form onSubmit={handleCreateAttestationSubservice} className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service (Category)</label>
+                          <select
+                            required
+                            value={newSubservice.attestationCategory}
+                            onChange={e => setNewSubservice(s => ({ ...s, attestationCategory: e.target.value }))}
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          >
+                            {ATTESTATION_CATEGORIES.map(c => (
+                              <option key={c.key} value={c.key}>{c.display}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Subservice Name (e.g. HEC Attestation)</label>
+                          <input
+                            type="text"
+                            required
+                            value={newSubservice.serviceName}
+                            onChange={e => setNewSubservice(s => ({ ...s, serviceName: e.target.value }))}
+                            placeholder="HEC Attestation"
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Days (e.g. 8 working days)</label>
+                          <input
+                            type="text"
+                            value={newSubservice.days}
+                            onChange={e => setNewSubservice(s => ({ ...s, days: e.target.value }))}
+                            placeholder="8 working days"
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Base Rate (PKR)</label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            step={1}
+                            value={newSubservice.baseRate}
+                            onChange={e => setNewSubservice(s => ({ ...s, baseRate: e.target.value }))}
+                            placeholder="18000"
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Additional Charges (PKR, optional)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={newSubservice.additionalCharges}
+                            onChange={e => setNewSubservice(s => ({ ...s, additionalCharges: e.target.value }))}
+                            placeholder="3000"
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isServiceSubmitting}
+                          className="w-full bg-sky-600 text-white py-3 rounded-lg font-black uppercase tracking-widest hover:bg-sky-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-200"
+                        >
+                          {isServiceSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add Subservice'}
+                        </button>
+                      </form>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Adding for other product types?</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewService(s => ({ ...s, serviceType: 'General' }))}
+                        className="text-xs font-bold text-sky-600 hover:underline"
                       >
-                        {PRODUCT_TYPES.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
-                      </select>
+                        Switch to Add Service
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service Name (e.g. Over Night)</label>
-                      <input
-                        type="text"
-                        required
-                        value={newService.serviceName}
-                        onChange={e => setNewService(s => ({ ...s, serviceName: e.target.value }))}
-                        placeholder="Over Night"
-                        className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
-                      />
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-sky-50 p-6 rounded-xl border border-sky-100">
+                      <h3 className="text-sm font-black text-sky-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Add New Service
+                      </h3>
+                      <form onSubmit={handleCreateService} className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service Type (Product)</label>
+                          <select
+                            required
+                            value={newService.serviceType}
+                            onChange={e => setNewService(s => ({ ...s, serviceType: e.target.value }))}
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          >
+                            {PRODUCT_TYPES.map(type => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service Name (e.g. Over Night)</label>
+                          <input
+                            type="text"
+                            required
+                            value={newService.serviceName}
+                            onChange={e => setNewService(s => ({ ...s, serviceName: e.target.value }))}
+                            placeholder="Over Night"
+                            className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isServiceSubmitting}
+                          className="w-full bg-sky-600 text-white py-3 rounded-lg font-black uppercase tracking-widest hover:bg-sky-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-200"
+                        >
+                          {isServiceSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Service'}
+                        </button>
+                      </form>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={isServiceSubmitting}
-                      className="w-full bg-sky-600 text-white py-3 rounded-lg font-black uppercase tracking-widest hover:bg-sky-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-200"
-                    >
-                      {isServiceSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Service'}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 leading-relaxed italic">
-                  <strong>Technical Note:</strong> When you add a new service, it will appear as a column in the rates table. To set prices, you'll need to update existing weight tiers or use the bulk seeder (coming soon).
-                </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Adding attestation subservices?</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewService(s => ({ ...s, serviceType: 'Attestation' }))}
+                        className="text-xs font-bold text-sky-600 hover:underline"
+                      >
+                        Switch to Attestation
+                      </button>
+                    </div>
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 leading-relaxed italic">
+                      <strong>Technical Note:</strong> When you add a new service, it will appear as a column in the rates table. To set prices, you'll need to update existing weight tiers or use the bulk seeder (coming soon).
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Right: Existing Services List */}
+              {/* Right: Existing Services List (Attestation grouped by category, others by type) */}
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                   <Package className="w-4 h-4" /> Active Services
@@ -693,46 +876,138 @@ export default function PricingRates() {
                   {services.length === 0 ? (
                     <div className="text-center py-10 text-gray-400 italic text-sm">No services configured yet</div>
                   ) : (
-                    services
-                      .filter(s => PRODUCT_TYPES.includes(s.serviceType))
-                      .reduce((acc, s) => {
-                        const typeIdx = acc.findIndex(g => g.type === s.serviceType)
-                        if (typeIdx > -1) acc[typeIdx].list.push(s)
-                        else acc.push({ type: s.serviceType, list: [s] })
-                        return acc
-                      }, []).map(group => (
-                        <div key={group.type} className="border border-gray-100 rounded-xl overflow-hidden">
-                          <div className="bg-gray-50 px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-100">{group.type}</div>
-                          <div className="p-2 space-y-1">
-                            {group.list.map(s => (
-                              <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
-                                  {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
-                                </div>
-                                <div className="flex gap-1 items-center">
-                                  {s.status === 'inactive' && (
-                                    <button
-                                      onClick={() => handleActivateService(s.id)}
-                                      className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
-                                      title="Reactivate Service"
-                                    >
-                                      <CheckCircle className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleDeleteService(s.id, s.status)}
-                                    className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
-                                    title={s.status === 'active' ? 'Deactivate Service' : 'Permanently Delete Service'}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                    (() => {
+                      const attestationServices = services.filter(s => s.serviceType === 'Attestation')
+                      const otherServices = services.filter(s => s.serviceType !== 'Attestation' && PRODUCT_TYPES.includes(s.serviceType))
+                      return (
+                        <>
+                          {/* Attestation: grouped by category (Services = categories, Subservices = items) */}
+                          {attestationServices.length > 0 && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest">Attestation — Services & Subservices</p>
+                              {ATTESTATION_CATEGORIES.map(cat => {
+                                const subservices = attestationServices.filter(
+                                  s => (inferAttestationCategory(s) || '').toLowerCase() === cat.key.toLowerCase()
+                                )
+                                return (
+                                  <div key={cat.key} className="border border-sky-100 rounded-xl overflow-hidden">
+                                    <div className="bg-sky-50 px-4 py-2 text-[10px] font-black text-sky-700 uppercase tracking-widest border-b border-sky-100">
+                                      {cat.display} <span className="text-sky-500 font-normal">({subservices.length})</span>
+                                    </div>
+                                    <div className="p-2 space-y-1">
+                                      {subservices.length === 0 ? (
+                                        <div className="text-center py-4 text-gray-400 text-xs italic">No subservices yet</div>
+                                      ) : (
+                                        subservices.map(s => (
+                                          <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                            <div className="flex flex-col">
+                                              <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
+                                              {s.days && <span className="text-[10px] text-gray-500">{s.days}</span>}
+                                              {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
+                                            </div>
+                                            <div className="flex gap-1 items-center">
+                                              {s.status === 'inactive' && (
+                                                <button
+                                                  onClick={() => handleActivateService(s.id)}
+                                                  className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                                                  title="Reactivate Service"
+                                                >
+                                                  <CheckCircle className="w-4 h-4" />
+                                                </button>
+                                              )}
+                                              <button
+                                                onClick={() => handleDeleteService(s.id, s.status)}
+                                                className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
+                                                title={s.status === 'active' ? 'Deactivate Subservice' : 'Permanently Delete Subservice'}
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                              {/* Uncategorized: only services that don't match any category by name or attestationCategory */}
+                              {(() => {
+                                const uncategorized = attestationServices.filter(s => inferAttestationCategory(s) == null)
+                                if (uncategorized.length === 0) return null
+                                return (
+                                  <div className="border border-amber-100 rounded-xl overflow-hidden">
+                                    <div className="bg-amber-50 px-4 py-2 text-[10px] font-black text-amber-700 uppercase tracking-widest border-b border-amber-100">
+                                      Uncategorized <span className="text-amber-500 font-normal">({uncategorized.length})</span>
+                                    </div>
+                                    <div className="p-2 space-y-1">
+                                      {uncategorized.map(s => (
+                                        <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                          <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
+                                            {s.days && <span className="text-[10px] text-gray-500">{s.days}</span>}
+                                            {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
+                                          </div>
+                                          <div className="flex gap-1 items-center">
+                                            {s.status === 'inactive' && (
+                                              <button onClick={() => handleActivateService(s.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100" title="Reactivate Service">
+                                                <CheckCircle className="w-4 h-4" />
+                                              </button>
+                                            )}
+                                            <button onClick={() => handleDeleteService(s.id, s.status)} className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`} title={s.status === 'active' ? 'Deactivate Subservice' : 'Permanently Delete Subservice'}>
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )}
+                          {/* Other product types: grouped by type */}
+                          {otherServices.length > 0 && otherServices
+                            .reduce((acc, s) => {
+                              const typeIdx = acc.findIndex(g => g.type === s.serviceType)
+                              if (typeIdx > -1) acc[typeIdx].list.push(s)
+                              else acc.push({ type: s.serviceType, list: [s] })
+                              return acc
+                            }, []).map(group => (
+                              <div key={group.type} className="border border-gray-100 rounded-xl overflow-hidden">
+                                <div className="bg-gray-50 px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-100">{group.type}</div>
+                                <div className="p-2 space-y-1">
+                                  {group.list.map(s => (
+                                    <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                      <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
+                                        {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
+                                      </div>
+                                      <div className="flex gap-1 items-center">
+                                        {s.status === 'inactive' && (
+                                          <button
+                                            onClick={() => handleActivateService(s.id)}
+                                            className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                                            title="Reactivate Service"
+                                          >
+                                            <CheckCircle className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => handleDeleteService(s.id, s.status)}
+                                          className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
+                                          title={s.status === 'active' ? 'Deactivate Service' : 'Permanently Delete Service'}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             ))}
-                          </div>
-                        </div>
-                      ))
+                        </>
+                      )
+                    })()
                   )}
                 </div>
               </div>

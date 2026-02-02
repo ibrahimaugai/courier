@@ -125,14 +125,15 @@ model Route {
 // ============================================
 
 model Service {
-  id          String   @id @default(uuid())
-  serviceCode String   @unique @map("service_code")
-  serviceName String   @map("service_name")
-  serviceType String   @map("service_type")
-  days        String?  @map("days") // Processing time (e.g., "4 to 5 working days")
-  status      String   @default("active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid())
+  serviceCode          String   @unique @map("service_code")
+  serviceName          String   @map("service_name")
+  serviceType          String   @map("service_type")
+  days                 String?  @map("days") // Processing time (e.g., "4 to 5 working days")
+  attestationCategory  String?  @map("attestation_category") // For Attestation only: NPS, Embassy, Educational, Special, Translation
+  status               String   @default("active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   // Relations
   pricingRules PricingRule[]
