@@ -248,7 +248,6 @@ export default function EditBooking() {
 
             <div className="mb-6 flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-800">Edit Booking</h1>
-                <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
             </div>
 
             {/* Search Section */}

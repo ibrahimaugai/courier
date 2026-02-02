@@ -55,9 +55,6 @@ export default function RmsToday() {
           <p className="text-sm text-gray-500 mt-1 italic tracking-tight uppercase font-medium">Record Management System</p>
         </div>
         <div className="text-right">
-          <span className="text-sm text-green-600 font-black block px-3 py-1 bg-green-50 rounded-full border border-green-100 shadow-sm">
-            VER -1.863 LIVE
-          </span>
           <p className="text-xs text-gray-400 mt-2 font-medium">{new Date().toLocaleTimeString()}</p>
         </div>
       </div>

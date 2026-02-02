@@ -120,7 +120,6 @@ export default function Configuration() {
       <div className="mb-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">System Configuration</h1>
-          <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
         </div>
       </div>
 

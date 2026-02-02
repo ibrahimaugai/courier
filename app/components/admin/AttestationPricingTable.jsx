@@ -209,7 +209,7 @@ export default function AttestationPricingTable({ services, onUpdateRate }) {
                                         type="number"
                                         value={editingService.addPageRate}
                                         onChange={e => setEditingService(prev => ({ ...prev, addPageRate: e.target.value }))}
-                                        className="w-full pl-14 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-lg font-black text-gray-900 transition-all"
+                                        className="w-full pl-14 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 text-lg font-black text-gray-900 transition-all"
                                         placeholder="Optional"
                                     />
                                 </div>

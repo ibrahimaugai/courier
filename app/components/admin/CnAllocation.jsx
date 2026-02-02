@@ -81,7 +81,6 @@ export default function CnAllocation() {
       {/* Header Section */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">CN Allocation</h1>
-        <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
       </div>
 
       {/* CN Allocation Form */}
@@ -104,7 +103,7 @@ export default function CnAllocation() {
               name="productId"
               value={formData.productId}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white">
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-white">
               <option value="">Select Product</option>
               <option value="General">General</option>
               <option value="International">International</option>
@@ -126,7 +125,7 @@ export default function CnAllocation() {
               value={formData.startCnNumber}
               onChange={handleChange}
               placeholder="Enter starting CN number"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
 
@@ -141,7 +140,7 @@ export default function CnAllocation() {
               value={formData.endCnNumber}
               onChange={handleChange}
               placeholder="Enter ending CN number"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
 

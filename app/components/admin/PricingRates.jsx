@@ -774,7 +774,7 @@ export default function PricingRates() {
                         value={newCity.cityName}
                         onChange={e => setNewCity(s => ({ ...s, cityName: e.target.value }))}
                         placeholder="Islamabad"
-                        className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-900"
+                        className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-emerald-900"
                       />
                     </div>
                     <div>
@@ -786,7 +786,7 @@ export default function PricingRates() {
                         value={newCity.cityCode}
                         onChange={e => setNewCity(s => ({ ...s, cityCode: e.target.value.toUpperCase() }))}
                         placeholder="ISB"
-                        className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-900"
+                        className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-emerald-900"
                       />
                     </div>
                     <button

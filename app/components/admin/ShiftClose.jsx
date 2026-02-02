@@ -171,8 +171,6 @@ export default function ShiftClose() {
           </div>
           <div className="text-right flex flex-col items-end gap-2">
             <div className="flex items-center gap-3">
-
-              <span className="text-sm text-green-600 font-medium block">VER -1.863 LIVE</span>
             </div>
 
             <p className="text-xs text-gray-500">Today: {new Date().toLocaleDateString()}</p>

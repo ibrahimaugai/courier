@@ -900,7 +900,6 @@ export default function BookingConsignment() {
                 <span className="text-sm font-black text-sky-700">{activeBatch.batchCode}</span>
               </div>
             )}
-            <span className="text-sm text-gray-600 font-medium">VER -1.863 LIVE</span>
           </div>
         </div>
       </div>

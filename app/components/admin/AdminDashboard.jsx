@@ -1,5 +1,5 @@
 'use client'
-import { Activity, Database, Code, TrendingUp, Package, Users, Clock, Truck, CheckCircle2, AlertCircle, CheckCircle } from 'lucide-react'
+import { Activity, Database, TrendingUp, Package, Users, Clock, Truck, CheckCircle2, AlertCircle, CheckCircle } from 'lucide-react'
 import { useSelector } from 'react-redux'
 
 export default function AdminDashboard() {
@@ -99,21 +99,6 @@ export default function AdminDashboard() {
           <p className="text-sm text-gray-600">Real-time sync active</p>
         </div>
 
-        {/* Version Card */}
-        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl border border-indigo-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-lg shadow-md">
-              <Code className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-              <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Live</span>
-            </div>
-          </div>
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Version</h3>
-          <p className="text-2xl font-bold text-indigo-700 mb-1">v1.863</p>
-          <p className="text-sm text-gray-600">Production release</p>
-        </div>
       </div>
 
       {/* Quick Stats */}

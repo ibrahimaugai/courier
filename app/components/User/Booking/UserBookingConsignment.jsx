@@ -782,7 +782,6 @@ export default function UserBookingConsignment() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Booking (Consignment)</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 font-medium">VER -1.863 LIVE</span>
           </div>
         </div>
       </div>

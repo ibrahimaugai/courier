@@ -99,7 +99,6 @@ export default function BatchCutOff() {
           <h1 className="text-3xl font-bold text-gray-800">Batch Cut Off</h1>
         </div>
         <div className="text-right">
-          <span className="text-sm text-green-600 font-medium block">VER -1.863 LIVE</span>
           <p className="text-xs text-gray-500 mt-1">Station: {config?.stationCode || 'N/A'}</p>
         </div>
       </div>

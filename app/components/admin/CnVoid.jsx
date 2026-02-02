@@ -71,7 +71,6 @@ export default function CnVoid() {
 
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">CN Void</h1>
-          <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
         </div>
       </div>
 
@@ -89,7 +88,7 @@ export default function CnVoid() {
               value={cnNumber}
               onChange={(e) => setCnNumber(e.target.value)}
               placeholder="Enter CN Number to search"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
           <button

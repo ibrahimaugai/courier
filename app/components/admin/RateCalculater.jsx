@@ -7,7 +7,6 @@ export default function RateCalculator() {
       <div className="mb-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">Rate Calculator</h1>
-          <span className="text-sm text-green-600 font-medium">VER -1.863 LIVE</span>
         </div>
       </div>
 
@@ -37,7 +36,7 @@ export default function RateCalculator() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Destination
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white">
+            <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-white">
               <option value="">Select Destination</option>
             </select>
           </div>
@@ -47,7 +46,7 @@ export default function RateCalculator() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Service
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white">
+            <select className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-white">
               <option value="">Select Service</option>
             </select>
           </div>
@@ -62,7 +61,7 @@ export default function RateCalculator() {
               <input
                 type="number"
                 placeholder="Enter weight"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               />
             </div>
 
@@ -73,7 +72,7 @@ export default function RateCalculator() {
               </label>
               <input
                 type="number"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               />
             </div>
           </div>
