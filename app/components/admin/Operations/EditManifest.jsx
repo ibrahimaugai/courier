@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, X, Trash2, CheckCircle, Truck, Phone, MapPin } from 'lucide-react'
 import { api } from '../../../lib/api'
 
@@ -9,6 +9,7 @@ export default function EditManifest({ setActivePage, manifestId }) {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [manifestDetails, setManifestDetails] = useState(null)
+    const lastAttemptedCnRef = useRef('')
 
     // Form State
     const [formData, setFormData] = useState({
@@ -69,40 +70,58 @@ export default function EditManifest({ setActivePage, manifestId }) {
         }
     }
 
-    const handleCnLookup = async (e) => {
+    const triggerCnLookup = useCallback(async (cn) => {
+        const trimmedCn = cn.trim()
+        if (!trimmedCn || isLoading) return
+
+        lastAttemptedCnRef.current = trimmedCn
+
+        if (scannedConsignments.some(item => item.cnNumber === trimmedCn)) {
+            setError('CN already added to this manifest.')
+            setFormData(prev => ({ ...prev, cnNumber: '' }))
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+        try {
+            const result = await api.trackBooking(trimmedCn)
+            const booking = result?.data || result
+
+            if (booking) {
+                setScannedConsignments(prev => [booking, ...prev])
+                setSuccess(`CN ${trimmedCn} Added!`)
+                setFormData(prev => ({ ...prev, cnNumber: '' }))
+            } else {
+                setError('Consignment not found.')
+            }
+        } catch (err) {
+            console.error('Error lookup CN:', err)
+            setError('CN not found or network error.')
+        } finally {
+            setIsLoading(false)
+        }
+    }, [isLoading, scannedConsignments])
+
+    const handleCnLookup = (e) => {
         if (e.key === 'Enter') {
             e.preventDefault()
-            const cn = formData.cnNumber.trim()
-            if (!cn) return
-
-            // Check if already scanned
-            if (scannedConsignments.some(item => item.cnNumber === cn)) {
-                setError('CN already added to this manifest.')
-                setFormData(prev => ({ ...prev, cnNumber: '' }))
-                return
-            }
-
-            setIsLoading(true)
-            setError('')
-            try {
-                const result = await api.trackBooking(cn)
-                const booking = result?.data || result
-
-                if (booking) {
-                    setScannedConsignments(prev => [booking, ...prev])
-                    setSuccess(`CN ${cn} Added!`)
-                    setFormData(prev => ({ ...prev, cnNumber: '' }))
-                } else {
-                    setError('Consignment not found.')
-                }
-            } catch (err) {
-                console.error('Error lookup CN:', err)
-                setError('CN not found or network error.')
-            } finally {
-                setIsLoading(false)
-            }
+            triggerCnLookup(formData.cnNumber)
         }
     }
+
+    // Auto-fetch CN when CN changes in search bar (debounce). Only call once per CN; do not retry same CN on failure.
+    useEffect(() => {
+        const cn = formData.cnNumber.trim()
+        if (cn.length < 6) return
+        if (cn === lastAttemptedCnRef.current) return
+
+        const timer = setTimeout(() => {
+            lastAttemptedCnRef.current = cn
+            triggerCnLookup(cn)
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [formData.cnNumber, triggerCnLookup])
 
     const handleRemoveConsignment = async (item) => {
         if (item.shipmentId) {

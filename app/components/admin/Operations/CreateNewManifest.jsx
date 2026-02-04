@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Calendar, Package, User, Hash, Search, Loader2, ArrowLeft, Plus, Trash2, Truck, Phone, MapPin, AlertCircle, CheckCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
 
@@ -8,6 +8,7 @@ export default function CreateNewManifest({ setActivePage }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const lastAttemptedCnRef = useRef('')
 
   // Create Form State
   const [formData, setFormData] = useState({
@@ -67,6 +68,8 @@ export default function CreateNewManifest({ setActivePage }) {
     const trimmedCn = cn.trim()
     if (!trimmedCn || isLoading) return
 
+    lastAttemptedCnRef.current = trimmedCn
+
     // Check if already scanned
     if (scannedConsignments.some(item => item.cnNumber === trimmedCn)) {
       setError('CN already added to this manifest.')
@@ -102,16 +105,18 @@ export default function CreateNewManifest({ setActivePage }) {
     }
   }
 
-  // Auto-fetch CN details after typing (debounce)
+  // Auto-fetch CN details when CN changes in search bar (debounce). Only call once per CN; do not retry same CN on failure.
   useEffect(() => {
-    const cn = formData.cnNumber.trim();
-    if (cn.length >= 6) {
-      const timer = setTimeout(() => {
-        triggerCnLookup(cn);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [formData.cnNumber, triggerCnLookup]);
+    const cn = formData.cnNumber.trim()
+    if (cn.length < 6) return
+    if (cn === lastAttemptedCnRef.current) return
+
+    const timer = setTimeout(() => {
+      lastAttemptedCnRef.current = cn
+      triggerCnLookup(cn)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [formData.cnNumber, triggerCnLookup])
 
   const handleSaveChanges = async () => {
     if (scannedConsignments.length === 0) {

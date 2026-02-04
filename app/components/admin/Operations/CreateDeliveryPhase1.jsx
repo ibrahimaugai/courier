@@ -27,6 +27,7 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
     const [success, setSuccess] = useState('')
 
     const cnInputRef = useRef(null)
+    const lastAttemptedCnRef = useRef('')
 
     useEffect(() => {
         fetchDrivers()
@@ -88,6 +89,8 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
         const trimmedCn = cn.trim()
         if (!trimmedCn || isLoading) return
 
+        lastAttemptedCnRef.current = trimmedCn
+
         if (shipments.some(s => s.cn === trimmedCn)) {
             setError('CN already scanned')
             setFormData(prev => ({ ...prev, cn: '' }))
@@ -130,15 +133,17 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
         }
     }
 
-    // Auto-fetch CN details after typing (debounce)
+    // Auto-fetch CN details when CN changes in search bar (debounce). Only call once per CN; do not retry same CN on failure.
     useEffect(() => {
         const cn = formData.cn.trim()
-        if (cn.length >= 6) {
-            const timer = setTimeout(() => {
-                triggerCnScan(cn)
-            }, 500)
-            return () => clearTimeout(timer)
-        }
+        if (cn.length < 6) return
+        if (cn === lastAttemptedCnRef.current) return
+
+        const timer = setTimeout(() => {
+            lastAttemptedCnRef.current = cn
+            triggerCnScan(cn)
+        }, 500)
+        return () => clearTimeout(timer)
     }, [formData.cn, triggerCnScan])
 
     const handleSave = async () => {
