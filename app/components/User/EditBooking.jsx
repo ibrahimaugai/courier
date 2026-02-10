@@ -161,7 +161,8 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
   const rawStatus = currentBooking?.status || selectedShipment?.originalBooking?.status || selectedShipment?.status
   const isEditable = rawStatus === 'PENDING' || rawStatus === 'BOOKED' || rawStatus === 'PICKUP_REQUESTED'
   const isReadOnly = !isEditable
-  const displayStatus = rawStatus?.replace('_', ' ') || 'Unknown'
+  const statusLabels = { RIDER_ON_WAY: 'Rider Assigned', PICKUP_REQUESTED: 'Pickup Requested' }
+  const displayStatus = (rawStatus && statusLabels[rawStatus]) || rawStatus?.replace(/_/g, ' ') || 'Unknown'
 
   const handleInputChange = (e) => {
     const { name, value } = e.target

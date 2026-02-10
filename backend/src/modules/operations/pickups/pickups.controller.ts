@@ -49,8 +49,11 @@ export class PickupsController {
         @Body('status') status: PickupStatus,
         @Body('riderId') riderId?: string,
         @Body('riderName') riderName?: string,
+        @Body('riderPhone') riderPhone?: string,
+        @Request() req?: { user?: { id: string } },
     ) {
-        return this.pickupsService.updateStatus(id, status, riderId, riderName);
+        const userId = req?.user?.id;
+        return this.pickupsService.updateStatus(id, status, riderId, riderName, riderPhone, userId);
     }
 
     @Post(':id/cancel')

@@ -29,6 +29,7 @@ export default function PickupManagement() {
   const [statusModal, setStatusModal] = useState({ isOpen: false, pickup: null, newStatus: '' })
   const [detailModal, setDetailModal] = useState({ isOpen: false, pickup: null })
   const [riderName, setRiderName] = useState('')
+  const [riderPhone, setRiderPhone] = useState('')
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export default function PickupManagement() {
   const handleAssignRider = (pickup) => {
     setAssignModal({ isOpen: true, pickup })
     setRiderName(pickup.riderName || '')
+    setRiderPhone(pickup.riderPhone || '')
   }
 
   const handleConfirmAssign = async () => {
@@ -59,23 +61,100 @@ export default function PickupManagement() {
       setToast({ isVisible: true, message: 'Please enter rider name', type: 'error' })
       return
     }
+    if (!riderPhone || !riderPhone.trim()) {
+      setToast({ isVisible: true, message: 'Please enter rider phone number', type: 'error' })
+      return
+    }
 
     const result = await dispatch(updatePickupStatus({
       id: assignModal.pickup.id,
       status: 'ASSIGNED',
-      riderName: riderName.trim()
+      riderName: riderName.trim(),
+      riderPhone: riderPhone.trim()
     }))
 
     if (updatePickupStatus.fulfilled.match(result)) {
       setToast({ isVisible: true, message: 'Rider assigned successfully!', type: 'success' })
       setAssignModal({ isOpen: false, pickup: null })
       setRiderName('')
+      setRiderPhone('')
       loadPickups()
     }
   }
 
   const handleUpdateStatus = (pickup, newStatus) => {
     setStatusModal({ isOpen: true, pickup, newStatus })
+  }
+
+  const handlePrintPickup = async (pickup) => {
+    const b = pickup.booking || {}
+    let bookingDetail = null
+    if (b.cnNumber) {
+      try {
+        const res = await api.trackBooking(b.cnNumber)
+        bookingDetail = res?.data || res
+      } catch (_) {}
+    }
+    const riderName = pickup.riderName || pickup.assignedRider?.name || '—'
+    const riderPhone = pickup.riderPhone || pickup.assignedRider?.phone || '—'
+    const cell = (label, value) => `<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#475569;width:180px">${label}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a">${(value || '—').toString().replace(/</g, '&lt;')}</td></tr>`
+    const section = (title) => `<tr><td colspan="2" style="padding:12px 0 6px;font-weight:800;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em">${title}</td></tr>`
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Pickup - ${(b.cnNumber || pickup.id || 'detail').toString()}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#0f172a}
+table{width:100%;border-collapse:collapse} h1{font-size:1.25rem;margin:0 0 16px;color:#0f172a}
+</style></head>
+<body>
+<h1>Pickup / Booking Details</h1>
+<table>
+${section('')}
+${cell('CN Number', b.cnNumber)}
+${cell('Booking Status', bookingDetail?.status || b.status)}
+${cell('Pickup Request Status', pickup.status)}
+${cell('Request Created', pickup.createdAt ? new Date(pickup.createdAt).toLocaleString() : '')}
+${section('Booking')}
+${cell('Origin', bookingDetail?.originCity?.cityName || b.originCity?.cityName)}
+${cell('Destination', bookingDetail?.destinationCity?.cityName || b.destinationCity?.cityName)}
+${cell('Customer (Shipper)', bookingDetail?.customer?.name || b.customer?.name)}
+${cell('Shipper Phone', bookingDetail?.customer?.phone)}
+${cell('Consignee Name', bookingDetail?.consigneeName)}
+${cell('Consignee Phone', bookingDetail?.consigneePhone)}
+${cell('Consignee Address', bookingDetail?.consigneeAddress)}
+${cell('Pieces', bookingDetail?.pieces != null ? bookingDetail.pieces : '')}
+${cell('Weight (kg)', bookingDetail?.weight != null ? bookingDetail.weight : '')}
+${cell('Service', bookingDetail?.service?.serviceName)}
+${cell('Payment Mode', bookingDetail?.paymentMode)}
+${cell('Total Amount', bookingDetail?.totalAmount != null ? bookingDetail.totalAmount : '')}
+${cell('COD Amount', bookingDetail?.codAmount != null ? bookingDetail.codAmount : '')}
+${section('Pickup Request')}
+${cell('Pickup Date', pickup.pickupDate ? new Date(pickup.pickupDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')}
+${cell('Pickup Time', pickup.pickupTime || 'Flexible / Anytime')}
+${cell('Contact Name', pickup.contactName)}
+${cell('Contact Phone', pickup.contactPhone)}
+${cell('Pickup Address', pickup.pickupAddress)}
+${cell('Special Instructions', pickup.specialInstructions || 'None')}
+${section('Assigned Rider')}
+${cell('Rider Name', riderName)}
+${cell('Rider Phone', riderPhone)}
+${cell('Generated', new Date().toLocaleString())}
+</table>
+</body>
+</html>`
+    const win = window.open('', '_blank')
+    if (!win) {
+      setToast({ isVisible: true, message: 'Allow popups to print', type: 'error' })
+      return
+    }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => {
+      win.print()
+      win.close()
+    }, 300)
+    setToast({ isVisible: true, message: 'Print dialog opened', type: 'success' })
   }
 
   const handleConfirmStatusUpdate = async () => {
@@ -286,9 +365,9 @@ export default function PickupManagement() {
                             </div>
                             <div>
                               <div className="text-sm font-bold text-slate-900">{pickup.riderName || pickup.assignedRider?.name}</div>
-                              {pickup.assignedRider?.phone && (
-                                <div className="text-[11px] text-slate-500 font-medium">{pickup.assignedRider.phone}</div>
-                              )}
+                              <div className="text-[11px] text-slate-500 font-medium">
+                                {pickup.riderPhone || pickup.assignedRider?.phone || '—'}
+                              </div>
                             </div>
                           </div>
                         ) : (
@@ -319,15 +398,13 @@ export default function PickupManagement() {
                               <CheckCircle className="w-4 h-4" />
                             </button>
                           )}
-                          {['REQUESTED', 'ASSIGNED'].includes(pickup.status) && (
-                            <button
-                              onClick={() => handleUpdateStatus(pickup, 'CANCELLED')}
-                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-rose-100"
-                              title="Cancel Request"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handlePrintPickup(pickup)}
+                            className="p-2 text-slate-400 hover:text-sky-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-sky-100"
+                            title="Print full details"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -382,6 +459,7 @@ export default function PickupManagement() {
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => {
             setAssignModal({ isOpen: false, pickup: null })
             setRiderName('')
+            setRiderPhone('')
           }} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
@@ -404,12 +482,28 @@ export default function PickupManagement() {
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none text-sm font-medium"
                   autoFocus
                   onKeyPress={(e) => {
-                    if (e.key === 'Enter' && riderName.trim()) {
-                      handleConfirmAssign()
-                    }
+                    if (e.key === 'Enter' && riderName.trim() && riderPhone.trim()) handleConfirmAssign()
                   }}
                 />
-                <p className="text-xs text-slate-500 mt-1">Enter the name of the rider assigned to this pickup</p>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Rider Phone <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="tel"
+                    value={riderPhone}
+                    onChange={(e) => setRiderPhone(e.target.value)}
+                    placeholder="e.g. 0300 1234567"
+                    className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none text-sm font-medium"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && riderName.trim() && riderPhone.trim()) handleConfirmAssign()
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Phone number of the rider assigned to this pickup</p>
               </div>
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
@@ -417,13 +511,14 @@ export default function PickupManagement() {
                 onClick={() => {
                   setAssignModal({ isOpen: false, pickup: null })
                   setRiderName('')
+                  setRiderPhone('')
                 }}
                 className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-colors"
               >
                 Cancel
               </button>
               <button
-                disabled={!riderName || !riderName.trim() || isLoading}
+                disabled={!riderName?.trim() || !riderPhone?.trim() || isLoading}
                 onClick={handleConfirmAssign}
                 className="flex-1 px-4 py-3 bg-sky-600 text-white rounded-xl font-bold hover:bg-sky-700 transition-all shadow-lg shadow-sky-200 disabled:opacity-50 flex items-center justify-center gap-2"
               >
@@ -509,12 +604,10 @@ export default function PickupManagement() {
                     </div>
                     <div>
                       <div className="text-lg font-black text-slate-900">{detailModal.pickup.riderName || detailModal.pickup.assignedRider?.name}</div>
-                      {detailModal.pickup.assignedRider?.phone && (
-                        <div className="text-sm text-sky-600 font-bold flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5" />
-                          {detailModal.pickup.assignedRider.phone}
-                        </div>
-                      )}
+                      <div className="text-sm text-sky-600 font-bold flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5" />
+                        {detailModal.pickup.riderPhone || detailModal.pickup.assignedRider?.phone || '—'}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -577,11 +670,11 @@ export default function PickupManagement() {
 
             <div className="p-6 border-t border-slate-100 bg-white grid grid-cols-2 gap-3">
               <button
-                onClick={() => window.print()}
-                className="px-4 py-4 bg-white border border-slate-200 rounded-2xl text-slate-600 font-black text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                onClick={() => handlePrintPickup(detailModal.pickup)}
+                className="px-4 py-4 bg-sky-600 text-white rounded-2xl font-black text-sm hover:bg-sky-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-200"
               >
                 <Printer className="w-5 h-5" />
-                DOCKET
+                PRINT
               </button>
               <button
                 onClick={() => setDetailModal({ isOpen: false, pickup: null })}

@@ -119,7 +119,7 @@ export class PricingService {
         days: true,
         attestationCategory: true,
         status: true,
-      },
+      } as any,
       orderBy: {
         serviceName: 'asc',
       },
@@ -165,11 +165,13 @@ export class PricingService {
     });
 
     // Prefer attestationCategory when set; fall back to name patterns for backward compatibility
+    type ServiceWithCategory = { attestationCategory?: string | null; serviceName: string };
     const subservices = allServices
       .filter((service) => {
-        if (service.attestationCategory) {
+        const svc = service as ServiceWithCategory;
+        if (svc.attestationCategory) {
           return categories.some(
-            (cat) => cat.toLowerCase() === service.attestationCategory?.toLowerCase()
+            (cat) => cat.toLowerCase() === svc.attestationCategory?.toLowerCase()
           );
         }
         const serviceNameLower = service.serviceName.toLowerCase();
@@ -332,7 +334,7 @@ export class PricingService {
         serviceCode,
         days: data.days ?? undefined,
         attestationCategory: data.attestationCategory ?? undefined,
-      },
+      } as any,
     });
     // For Attestation subservices: create default pricing rule (0–999 kg, one city) when baseRate provided
     if (

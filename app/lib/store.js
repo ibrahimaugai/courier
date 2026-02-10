@@ -668,9 +668,9 @@ export const cancelPickupRequest = createAsyncThunk(
 
 export const updatePickupStatus = createAsyncThunk(
   'pickups/updateStatus',
-  async ({ id, status, riderId, riderName }, { rejectWithValue }) => {
+  async ({ id, status, riderId, riderName, riderPhone }, { rejectWithValue }) => {
     try {
-      const response = await api.updatePickupStatus(id, status, riderId, riderName)
+      const response = await api.updatePickupStatus(id, status, riderId, riderName, riderPhone)
       return response?.data || response
     } catch (error) {
       return rejectWithValue(error.message)

@@ -704,7 +704,8 @@ model PickupRequest {
   status              PickupStatus @default(REQUESTED)
   assignedRiderId     String?      @map("assigned_rider_id")
   riderName           String?      @map("rider_name")
-  
+  riderPhone          String?      @map("rider_phone")
+
   createdBy           String       @map("created_by")
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")

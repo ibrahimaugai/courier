@@ -771,10 +771,14 @@ export const api = {
     return this.handleResponse(response)
   },
 
-  async updatePickupStatus(id, status, riderId) {
+  async updatePickupStatus(id, status, riderId, riderName, riderPhone) {
+    const body = { status }
+    if (riderId != null) body.riderId = riderId
+    if (riderName != null) body.riderName = riderName
+    if (riderPhone != null) body.riderPhone = riderPhone
     const response = await this.request(`/pickups/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, riderId }),
+      body: JSON.stringify(body),
     })
     return this.handleResponse(response)
   },

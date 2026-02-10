@@ -170,12 +170,13 @@ export class PickupsService {
         }
     }
 
-    async updateStatus(id: string, status: PickupStatus, riderId?: string, riderName?: string) {
+    async updateStatus(id: string, status: PickupStatus, riderId?: string, riderName?: string, riderPhone?: string, userId?: string) {
         const data: any = { status };
         if (riderId) data.assignedRiderId = riderId;
         if (riderName) data.riderName = riderName;
+        if (riderPhone !== undefined) data.riderPhone = riderPhone || null;
 
-        // Update booking status to RIDER_ON_WAY when rider is assigned
+        // Update booking status to RIDER_ON_WAY when rider is assigned, and add history
         if (status === 'ASSIGNED' && (riderId || riderName)) {
             const pickup = await this.prisma.pickupRequest.findUnique({
                 where: { id },
@@ -183,10 +184,26 @@ export class PickupsService {
             });
 
             if (pickup) {
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: pickup.bookingId },
+                    select: { status: true }
+                });
                 await this.prisma.booking.update({
                     where: { id: pickup.bookingId },
-                    data: { status: 'RIDER_ON_WAY' }
+                    data: { status: 'RIDER_ON_WAY' as any }
                 });
+                if (booking && userId) {
+                    await this.prisma.bookingHistory.create({
+                        data: {
+                            bookingId: pickup.bookingId,
+                            action: 'RIDER_ASSIGNED',
+                            oldStatus: booking.status as any,
+                            newStatus: 'RIDER_ON_WAY' as any,
+                            performedBy: userId,
+                            remarks: riderName ? `Rider assigned: ${riderName}` : 'Rider assigned'
+                        }
+                    });
+                }
             }
         }
 

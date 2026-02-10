@@ -47,12 +47,13 @@ export default function TrackShipment() {
     { id: 0, name: 'Request Received', status: 'PENDING' },
     { id: 1, name: 'Booked', status: 'BOOKED' },
     { id: 2, name: 'Pickup Requested', status: 'PICKUP_REQUESTED' },
-    { id: 3, name: 'Picked', status: 'PICKED' },
-    { id: 4, name: 'At Hub', status: 'AT_HUB' },
-    { id: 5, name: 'Manifested', status: 'MANIFESTED' },
-    { id: 6, name: 'In Transit', status: 'IN_TRANSIT' },
-    { id: 7, name: 'Out for Delivery', status: 'OUT_FOR_DELIVERY' },
-    { id: 8, name: 'Delivered', status: 'DELIVERED' }
+    { id: 3, name: 'Rider Assigned', status: 'RIDER_ON_WAY' },
+    { id: 4, name: 'Picked', status: 'PICKED' },
+    { id: 5, name: 'At Hub', status: 'AT_HUB' },
+    { id: 6, name: 'Manifested', status: 'MANIFESTED' },
+    { id: 7, name: 'In Transit', status: 'IN_TRANSIT' },
+    { id: 8, name: 'Out for Delivery', status: 'OUT_FOR_DELIVERY' },
+    { id: 9, name: 'Delivered', status: 'DELIVERED' }
   ]
 
   const handleTrack = async (e, cnToTrack = null) => {
@@ -92,6 +93,7 @@ export default function TrackShipment() {
       'PENDING': { bg: 'bg-amber-100', text: 'text-amber-700' },
       'BOOKED': { bg: 'bg-blue-100', text: 'text-blue-700' },
       'PICKUP_REQUESTED': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+      'RIDER_ON_WAY': { bg: 'bg-sky-100', text: 'text-sky-700' },
       'AT_HUB': { bg: 'bg-cyan-100', text: 'text-cyan-700' },
       'IN_TRANSIT': { bg: 'bg-purple-100', text: 'text-purple-700' },
       'AT_DEPOT': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
@@ -109,6 +111,7 @@ export default function TrackShipment() {
       'PENDING': 'Pending Approval',
       'BOOKED': 'Booked',
       'PICKUP_REQUESTED': 'Pickup Requested',
+      'RIDER_ON_WAY': 'Rider Assigned',
       'PICKED': 'Picked',
       'AT_HUB': 'At Hub',
       'MANIFESTED': 'Manifested',

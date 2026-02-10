@@ -43,6 +43,7 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
       'PENDING': 'Pending Approval',
       'BOOKED': 'Booked',
       'PICKUP_REQUESTED': 'Pickup Requested',
+      'RIDER_ON_WAY': 'Rider Assigned',
       'AT_HUB': 'At Hub',
       'IN_TRANSIT': 'In Transit',
       'AT_DEPOT': 'In Transit',
@@ -77,7 +78,7 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
 
   // Calculate summary stats
   const totalShipments = shipments.length
-  const pendingPickup = shipments.filter(s => s.status === 'Booked' || s.status === 'Pickup Requested' || s.status === 'Pending Approval').length
+  const pendingPickup = shipments.filter(s => ['Booked', 'Pickup Requested', 'Pending Approval', 'Rider Assigned'].includes(s.status)).length
   const inTransit = shipments.filter(s => s.status === 'In Transit').length
   const delivered = shipments.filter(s => s.status === 'Delivered').length
 
@@ -95,6 +96,7 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
       'Pending Approval': { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock },
       'Booked': { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock },
       'Pickup Requested': { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: Clock },
+      'Rider Assigned': { bg: 'bg-sky-100', text: 'text-sky-700', icon: Truck },
       'At Hub': { bg: 'bg-cyan-100', text: 'text-cyan-700', icon: Package },
       'In Transit': { bg: 'bg-purple-100', text: 'text-purple-700', icon: Truck },
       'Delivered': { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle2 },
