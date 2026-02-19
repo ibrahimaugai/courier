@@ -4,47 +4,27 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { api } from '../../lib/api'
 import { fetchAllPricing } from '../../lib/store'
-import { Filter, RefreshCw, TrendingUp, MapPin, Package, Loader2, Pencil, X, Plus, Trash2, Settings2, CheckCircle, Search } from 'lucide-react'
+import { Filter, RefreshCw, TrendingUp, MapPin, Package, Loader2, Pencil, X, Plus, Trash2, Settings2, Search } from 'lucide-react'
 import AttestationPricingTable from './AttestationPricingTable'
 
 const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation', 'COD']
 
-// Attestation: booking shows these as "Services" (categories); subservices are the items in the modal.
-const ATTESTATION_CATEGORIES = [
-  { display: 'NPS All Services', key: 'NPS' },
-  { display: 'Embassies Attestation', key: 'Embassy' },
-  { display: 'Educational Documents Attestation', key: 'Educational' },
-  { display: 'Special Documents', key: 'Special' },
-  { display: 'Translation of any embassy', key: 'Translation' },
-]
+// Default attestation categories (fetched from API; extended with user-created)
 
-// Infer attestation category from service name (same logic as backend getSubservices) for services without attestationCategory
+// Infer attestation category from service name (same logic as backend) for services without attestationCategory
 function inferAttestationCategory(service) {
   const stored = (service.attestationCategory || '').trim()
   if (stored) return stored
   const name = (service.serviceName || '').toLowerCase()
-  if (
-    name.includes('mofa general') ||
-    name.includes('apostille') ||
-    name.includes('national beuro') ||
-    name.includes('national bureau')
-  ) return 'NPS'
-  if (name.includes('embassy') || name.includes('culture')) return 'Embassy'
-  if (
-    name.includes('hec') ||
-    name.includes('university') ||
-    name.includes('ibcc') ||
-    name.includes('board') ||
-    name.includes('borad') ||
-    name.includes('enquivalence')
-  ) return 'Educational'
-  if (
-    name.includes('marriage') ||
-    name.includes('divorce') ||
-    name.includes('stamp paper') ||
-    name.includes('commercial documents')
-  ) return 'Special'
-  if (name.includes('translation')) return 'Translation'
+  if (name.includes('mofa') && (name.includes('doc') || name.includes('attestation'))) return 'ATS'
+  if (name.includes('mofa') && name.includes('home delivery')) return 'ATR'
+  if (name.includes('apostille') && name.includes('normal')) return 'APN'
+  if (name.includes('apostille') && (name.includes('urgent') || name.includes('urgnt'))) return 'APU'
+  if (name.includes('uae') && name.includes('embassy')) return 'AE'
+  if (name.includes('board') && name.includes('verification')) return 'BV'
+  if (name.includes('hec')) return 'HEC'
+  if (name.includes('ibcc')) return 'IBCC'
+  if (name.includes('national bureau') || name.includes('national beuro')) return 'NationalBureau'
   return null
 }
 
@@ -104,7 +84,7 @@ export default function PricingRates() {
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [newService, setNewService] = useState({ serviceName: '', serviceType: 'General' })
   const [newSubservice, setNewSubservice] = useState({
-    attestationCategory: 'NPS',
+    attestationCategory: 'ATS',
     serviceName: '',
     days: '',
     baseRate: '',
@@ -117,6 +97,20 @@ export default function PricingRates() {
   const [newCity, setNewCity] = useState({ cityName: '', cityCode: '' })
   const [isCitySubmitting, setIsCitySubmitting] = useState(false)
 
+  // Attestation categories (from API, supports create new)
+  const [attestationCategories, setAttestationCategories] = useState([
+    { display: 'ATS - Doc MOFA Attestation', key: 'ATS' },
+    { display: 'ATR - Doc MOFA Home Delivery', key: 'ATR' },
+    { display: 'APN - Apostille Normal', key: 'APN' },
+    { display: 'APU - Apostille Urgent', key: 'APU' },
+    { display: 'AE - UAE Embassy', key: 'AE' },
+    { display: 'BV - Board Verification', key: 'BV' },
+    { display: 'HEC - HEC', key: 'HEC' },
+    { display: 'IBCC - IBCC', key: 'IBCC' },
+    { display: 'National Bureau', key: 'NationalBureau' },
+  ])
+  const [newCategoryName, setNewCategoryName] = useState('')
+
   // Load data from Redux when rules change or component mounts
   useEffect(() => {
     if (isLoaded) {
@@ -125,6 +119,16 @@ export default function PricingRates() {
       dispatch(fetchAllPricing())
     }
   }, [isLoaded, reduxRules, reduxCities, reduxServices, reduxLoading, dispatch])
+
+  // Fetch attestation categories when service modal opens
+  useEffect(() => {
+    if (showServiceModal) {
+      api.getAttestationCategories().then((list) => {
+        const arr = Array.isArray(list) ? list : (list?.data ?? [])
+        if (arr.length > 0) setAttestationCategories(arr)
+      }).catch(() => {})
+    }
+  }, [showServiceModal])
 
   const processData = (rawRules, rawCities, rawServices) => {
     try {
@@ -325,6 +329,7 @@ export default function PricingRates() {
         id: rule.service.id,
         ruleId: rule.id,
         serviceName: rule.service.serviceName,
+        attestationCategory: rule.service?.attestationCategory,
         days: rule.service.days || getDays(rule.service.serviceName), // Use fallback
         baseRate: parseFloat(rule.baseRate),
         additionalCharges: rule.additionalCharges ? parseFloat(rule.additionalCharges) : null
@@ -381,8 +386,13 @@ export default function PricingRates() {
   const handleCreateAttestationSubservice = async (e) => {
     e.preventDefault()
     const name = (newSubservice.serviceName || '').trim()
+    const cat = (newSubservice.attestationCategory || '').trim()
     const baseRate = newSubservice.baseRate !== '' && newSubservice.baseRate !== null ? Number(newSubservice.baseRate) : null
     if (!name) return
+    if (!cat) {
+      alert('Please select or enter a service category.')
+      return
+    }
     if (baseRate === null || baseRate === undefined || isNaN(baseRate)) {
       alert('Please enter a valid base rate (PKR) for the subservice.')
       return
@@ -393,19 +403,24 @@ export default function PricingRates() {
       await api.createService({
         serviceType: 'Attestation',
         serviceName: name,
-        attestationCategory: newSubservice.attestationCategory,
+        attestationCategory: cat,
         days: (newSubservice.days || '').trim() || undefined,
         baseRate: Number(baseRate),
         additionalCharges: newSubservice.additionalCharges !== '' && newSubservice.additionalCharges != null && !isNaN(Number(newSubservice.additionalCharges)) ? Number(newSubservice.additionalCharges) : undefined,
       })
       setNewSubservice({
-        attestationCategory: newSubservice.attestationCategory,
+        attestationCategory: cat,
         serviceName: '',
         days: '',
         baseRate: '',
         additionalCharges: '',
       })
+      setNewCategoryName('')
       dispatch(fetchAllPricing())
+      api.getAttestationCategories().then((list) => {
+        const arr = Array.isArray(list) ? list : (list?.data ?? [])
+        if (arr.length > 0) setAttestationCategories(arr)
+      }).catch(() => {})
     } catch (err) {
       console.error('Error creating attestation subservice:', err)
       alert(err.message || 'Failed to create subservice')
@@ -414,12 +429,8 @@ export default function PricingRates() {
     }
   }
 
-  const handleDeleteService = async (id, status) => {
-    const msg = status === 'active'
-      ? 'Are you sure you want to deactivate this service? This will hide it from the booking forms.'
-      : 'Are you sure you want to permanently delete this service? This only works if no bookings have ever used it.'
-
-    if (!confirm(msg)) return
+  const handleDeleteService = async (id) => {
+    if (!confirm('Permanently delete this service? This cannot be undone. Fails if any bookings use it.')) return
 
     try {
       await api.deleteService(id)
@@ -447,12 +458,22 @@ export default function PricingRates() {
     }
   }
 
-  const handleDeleteCity = async (id, status) => {
-    const msg = status === 'active'
-      ? 'Are you sure you want to deactivate this city? This will hide it from the booking forms.'
-      : 'Are you sure you want to permanently delete this city? This only works if no pricing rules or bookings use it.'
+  const handleDeleteAttestationCategory = async (categoryKey) => {
+    if (!confirm(`Permanently delete category "${categoryKey}" and ALL subservices under it? This cannot be undone.`)) return
 
-    if (!confirm(msg)) return
+    try {
+      const res = await api.deleteAttestationCategory(categoryKey)
+      const deleted = res?.data?.deleted ?? res?.deleted ?? 0
+      dispatch(fetchAllPricing())
+      if (deleted > 0) alert(`Deleted ${deleted} subservice(s).`)
+    } catch (err) {
+      console.error('Error deleting attestation category:', err)
+      alert(err.message || 'Failed to delete category')
+    }
+  }
+
+  const handleDeleteCity = async (id) => {
+    if (!confirm('Permanently delete this city? This cannot be undone. Fails if used in rules, bookings, stations, or customers.')) return
 
     try {
       await api.deleteCity(id)
@@ -463,25 +484,6 @@ export default function PricingRates() {
     }
   }
 
-  const handleActivateCity = async (id) => {
-    try {
-      await api.updateCity(id, { status: 'active' })
-      dispatch(fetchAllPricing())
-    } catch (err) {
-      console.error('Error activating city:', err)
-      alert(err.message || 'Failed to activate city')
-    }
-  }
-
-  const handleActivateService = async (id) => {
-    try {
-      await api.updateService(id, { status: 'active' })
-      dispatch(fetchAllPricing())
-    } catch (err) {
-      console.error('Error activating service:', err)
-      alert(err.message || 'Failed to activate service')
-    }
-  }
 
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return 'PKR 0'
@@ -734,15 +736,38 @@ export default function PricingRates() {
                         <div>
                           <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Service (Category)</label>
                           <select
-                            required
-                            value={newSubservice.attestationCategory}
-                            onChange={e => setNewSubservice(s => ({ ...s, attestationCategory: e.target.value }))}
+                            value={attestationCategories.some(c => c.key === newSubservice.attestationCategory) ? newSubservice.attestationCategory : '__NEW__'}
+                            onChange={e => {
+                              const v = e.target.value
+                              if (v === '__NEW__') {
+                                setNewCategoryName(newSubservice.attestationCategory || '')
+                                setNewSubservice(s => ({ ...s, attestationCategory: '' }))
+                              } else {
+                                setNewCategoryName('')
+                                setNewSubservice(s => ({ ...s, attestationCategory: v }))
+                              }
+                            }}
                             className="w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900"
                           >
-                            {ATTESTATION_CATEGORIES.map(c => (
+                            <option value="">-- Select or add new below --</option>
+                            {attestationCategories.map(c => (
                               <option key={c.key} value={c.key}>{c.display}</option>
                             ))}
+                            <option value="__NEW__">+ Add new category</option>
                           </select>
+                          {!attestationCategories.some(c => c.key === newSubservice.attestationCategory) && (
+                            <input
+                              type="text"
+                              placeholder="New category name (e.g. Custom Docs)"
+                              value={newSubservice.attestationCategory || newCategoryName}
+                              onChange={e => {
+                                const v = e.target.value
+                                setNewCategoryName(v)
+                                setNewSubservice(s => ({ ...s, attestationCategory: v }))
+                              }}
+                              className="mt-2 w-full px-4 py-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-sky-900 placeholder:text-gray-400"
+                            />
+                          )}
                         </div>
                         <div>
                           <label className="block text-[10px] font-black text-sky-600 uppercase mb-1">Subservice Name (e.g. HEC Attestation)</label>
@@ -885,44 +910,40 @@ export default function PricingRates() {
                           {attestationServices.length > 0 && (
                             <div className="space-y-3">
                               <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest">Attestation — Services & Subservices</p>
-                              {ATTESTATION_CATEGORIES.map(cat => {
+                              {attestationCategories.map(cat => {
                                 const subservices = attestationServices.filter(
                                   s => (inferAttestationCategory(s) || '').toLowerCase() === cat.key.toLowerCase()
                                 )
                                 return (
                                   <div key={cat.key} className="border border-sky-100 rounded-xl overflow-hidden">
-                                    <div className="bg-sky-50 px-4 py-2 text-[10px] font-black text-sky-700 uppercase tracking-widest border-b border-sky-100">
-                                      {cat.display} <span className="text-sky-500 font-normal">({subservices.length})</span>
+                                    <div className="bg-sky-50 px-4 py-2 text-[10px] font-black text-sky-700 uppercase tracking-widest border-b border-sky-100 flex items-center justify-between">
+                                      <span>{cat.display} <span className="text-sky-500 font-normal">({subservices.length})</span></span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteAttestationCategory(cat.key)}
+                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
+                                        title="Delete entire category and all subservices"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
                                     </div>
                                     <div className="p-2 space-y-1">
                                       {subservices.length === 0 ? (
                                         <div className="text-center py-4 text-gray-400 text-xs italic">No subservices yet</div>
                                       ) : (
                                         subservices.map(s => (
-                                          <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                          <div key={s.id} className="flex items-center justify-between p-2 rounded-lg group transition-colors hover:bg-gray-50">
                                             <div className="flex flex-col">
                                               <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
                                               {s.days && <span className="text-[10px] text-gray-500">{s.days}</span>}
-                                              {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
                                             </div>
-                                            <div className="flex gap-1 items-center">
-                                              {s.status === 'inactive' && (
-                                                <button
-                                                  onClick={() => handleActivateService(s.id)}
-                                                  className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
-                                                  title="Reactivate Service"
-                                                >
-                                                  <CheckCircle className="w-4 h-4" />
-                                                </button>
-                                              )}
-                                              <button
-                                                onClick={() => handleDeleteService(s.id, s.status)}
-                                                className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
-                                                title={s.status === 'active' ? 'Deactivate Subservice' : 'Permanently Delete Subservice'}
-                                              >
-                                                <Trash2 className="w-4 h-4" />
-                                              </button>
-                                            </div>
+                                            <button
+                                              onClick={() => handleDeleteService(s.id)}
+                                              className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                                              title="Permanently Delete Subservice"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
                                           </div>
                                         ))
                                       )}
@@ -941,22 +962,14 @@ export default function PricingRates() {
                                     </div>
                                     <div className="p-2 space-y-1">
                                       {uncategorized.map(s => (
-                                        <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                        <div key={s.id} className="flex items-center justify-between p-2 rounded-lg group transition-colors hover:bg-gray-50">
                                           <div className="flex flex-col">
                                             <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
                                             {s.days && <span className="text-[10px] text-gray-500">{s.days}</span>}
-                                            {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
                                           </div>
-                                          <div className="flex gap-1 items-center">
-                                            {s.status === 'inactive' && (
-                                              <button onClick={() => handleActivateService(s.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100" title="Reactivate Service">
-                                                <CheckCircle className="w-4 h-4" />
-                                              </button>
-                                            )}
-                                            <button onClick={() => handleDeleteService(s.id, s.status)} className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`} title={s.status === 'active' ? 'Deactivate Subservice' : 'Permanently Delete Subservice'}>
-                                              <Trash2 className="w-4 h-4" />
-                                            </button>
-                                          </div>
+                                          <button onClick={() => handleDeleteService(s.id)} className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100" title="Permanently Delete Subservice">
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
                                         </div>
                                       ))}
                                     </div>
@@ -977,29 +990,17 @@ export default function PricingRates() {
                                 <div className="bg-gray-50 px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-100">{group.type}</div>
                                 <div className="p-2 space-y-1">
                                   {group.list.map(s => (
-                                    <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg group transition-colors ${s.status === 'active' ? 'hover:bg-gray-50' : 'bg-red-50/30'}`}>
+                                    <div key={s.id} className="flex items-center justify-between p-2 rounded-lg group transition-colors hover:bg-gray-50">
                                       <div className="flex flex-col">
                                         <span className="text-sm font-bold text-gray-700">{s.serviceName}</span>
-                                        {s.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
                                       </div>
-                                      <div className="flex gap-1 items-center">
-                                        {s.status === 'inactive' && (
-                                          <button
-                                            onClick={() => handleActivateService(s.id)}
-                                            className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
-                                            title="Reactivate Service"
-                                          >
-                                            <CheckCircle className="w-4 h-4" />
-                                          </button>
-                                        )}
-                                        <button
-                                          onClick={() => handleDeleteService(s.id, s.status)}
-                                          className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${s.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
-                                          title={s.status === 'active' ? 'Deactivate Service' : 'Permanently Delete Service'}
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
+                                      <button
+                                        onClick={() => handleDeleteService(s.id)}
+                                        className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                                        title="Permanently Delete Service"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
                                     </div>
                                   ))}
                                 </div>
@@ -1089,34 +1090,22 @@ export default function PricingRates() {
                     <div className="text-center py-10 text-gray-400 italic text-sm">No cities configured yet</div>
                   ) : (
                     cities.map(city => (
-                      <div key={city.id} className={`flex items-center justify-between p-3 border rounded-xl group transition-all ${city.status === 'active' ? 'border-gray-100 hover:bg-emerald-50' : 'border-red-100 bg-red-50/30'}`}>
+                      <div key={city.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl group transition-all hover:bg-emerald-50">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-xs ${city.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-xs bg-emerald-100 text-emerald-700">
                             {city.cityCode}
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-gray-700">{city.cityName}</span>
-                            {city.status === 'inactive' && <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Inactive</span>}
                           </div>
                         </div>
-                        <div className="flex gap-1 items-center">
-                          {city.status === 'inactive' && (
-                            <button
-                              onClick={() => handleActivateCity(city.id)}
-                              className="p-1.5 text-emerald-500 hover:bg-emerald-100 rounded-md transition-all opacity-0 group-hover:opacity-100"
-                              title="Reactivate City"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteCity(city.id, city.status)}
-                            className={`p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 ${city.status === 'active' ? 'text-red-300 hover:text-red-500 hover:bg-red-50' : 'text-red-500 hover:bg-red-100'}`}
-                            title={city.status === 'active' ? 'Deactivate City' : 'Permanently Delete City'}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => handleDeleteCity(city.id)}
+                          className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                          title="Permanently Delete City"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     ))
                   )}

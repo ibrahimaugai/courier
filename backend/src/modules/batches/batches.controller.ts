@@ -11,6 +11,12 @@ import { BatchStatus } from '@prisma/client';
 export class BatchesController {
     constructor(private readonly batchesService: BatchesService) { }
 
+    @Post('for-user')
+    @ApiOperation({ summary: 'Create next batch for USER role (username-YYYYMMDD-N)' })
+    async createForUser(@Request() req) {
+        return this.batchesService.createBatchForUser(req.user.id);
+    }
+
     @Post()
     @ApiOperation({ summary: 'Create a new batch' })
     async create(

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
+import { printShiftCloseReport } from '../../lib/shiftcloseprint'
 import { Calendar, Printer, Loader2, CheckCircle, AlertCircle, Package } from 'lucide-react'
 
 export default function ShiftClose() {
@@ -55,12 +56,13 @@ export default function ShiftClose() {
 
       // Handle NestJS TransformInterceptor response structure
       const data = result?.data || result || []
+      const batches = Array.isArray(data) ? data : []
 
-      setBatchOptions(Array.isArray(data) ? data : [])
+      setBatchOptions(batches)
 
-      if (Array.isArray(data) && data.length > 0) {
-        setSelectedBatchId(data[0].id)
-        setSuccess(`Found ${data.length} batches for this date.`)
+      if (batches.length > 0) {
+        setSelectedBatchId(batches[0].id)
+        setSuccess(`Found ${batches.length} batch(es) for this date.`)
       } else {
         setSelectedBatchId('')
         setBookings([])
@@ -113,8 +115,19 @@ export default function ShiftClose() {
   const handlePrintAndShiftClose = async () => {
     if (bookings.length === 0) return
 
-    // 1. Trigger Print immediately with current data
-    window.print()
+    const selectedBatch = batchOptions.find((b) => b.id === selectedBatchId)
+    const batchCode = selectedBatch?.batchCode ?? '—'
+    const printed = printShiftCloseReport(bookings, {
+      batchCode,
+      copyType: 'OFFICIAL SHIPPING SUMMARY',
+      preparedBy: config?.staffCode ?? 'N/A',
+      stationCode: config?.stationCode ?? null,
+      date: selectedDate
+    })
+    if (!printed) {
+      setError('Popup blocked. Please allow popups to print.')
+      return
+    }
 
     // 2. Logic for closure and new batch generation
     if (selectedBatchId === activeBatch?.id) {
@@ -128,17 +141,18 @@ export default function ShiftClose() {
         // Step A: Close current batch
         await api.updateBatchStatus(activeBatch.id, 'CLOSED')
 
-        // Step B: Generate NEW batch using config
-        if (!config || !config.stationCode || !config.staffCode) {
-          throw new Error('Incomplete configuration. Cannot auto-generate next batch.')
+        // Step B: Generate NEW batch (admin: from config; USER: username-YYYYMMDD-N)
+        let newBatch
+        if (config && config.stationCode && config.staffCode) {
+          newBatch = await api.createBatch({
+            batchDate: new Date().toISOString().split('T')[0],
+            stationCode: config.stationCode,
+            routeCode: config.routeCode,
+            staffCode: config.staffCode
+          })
+        } else {
+          newBatch = await api.createBatchForUser()
         }
-
-        const newBatch = await api.createBatch({
-          batchDate: new Date().toISOString().split('T')[0],
-          stationCode: config.stationCode,
-          routeCode: config.routeCode,
-          staffCode: config.staffCode
-        })
 
         // Instantly update local states to reflect the new batch
         setActiveBatch(newBatch)
@@ -277,132 +291,82 @@ export default function ShiftClose() {
               <table className="w-full text-left">
                 <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest">
                   <tr>
-                    <th className="px-6 py-4">CN Number</th>
-                    <th className="px-6 py-4">Shipper</th>
-                    <th className="px-6 py-4">Consignee</th>
-                    <th className="px-6 py-4">Destination</th>
-                    <th className="px-6 py-4 text-right">Amount</th>
+                    <th className="px-4 py-3">CN Number</th>
+                    <th className="px-4 py-3">Origin</th>
+                    <th className="px-4 py-3">Destination</th>
+                    <th className="px-4 py-3">Shipper</th>
+                    <th className="px-4 py-3">Consignee</th>
+                    <th className="px-4 py-3">Service</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Payment</th>
+                    <th className="px-4 py-3 text-center">Pcs / Wt</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {bookings.map((booking) => (
-                    <tr key={booking.id} className="hover:bg-sky-50/50 transition-colors group">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-base font-black text-sky-700 tracking-tight">{booking.cnNumber}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900 leading-tight">{booking.shipperName}</span>
-                          <span className="text-[10px] text-gray-500 font-medium">{booking.shipperPhone}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900 leading-tight">{booking.consigneeName}</span>
-                          <span className="text-[10px] text-gray-500 font-medium">{booking.consigneePhone}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-gray-100 text-gray-700 uppercase">
-                          {booking.destinationCity?.name || booking.destinationCityId}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-black text-gray-900">
-                          {parseFloat(booking.totalAmount).toLocaleString()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {bookings.map((booking) => {
+                    const originName = booking.originCity?.cityName || booking.originCity?.name || booking.originCityId || '—'
+                    const destName = booking.destinationCity?.cityName || booking.destinationCity?.name || booking.destinationCityId || '—'
+                    const payMode = booking.paymentMode || booking.payMode || '—'
+                    const status = booking.status || '—'
+                    const weightVal = booking.weight != null ? (typeof booking.weight === 'object' && booking.weight !== null && typeof booking.weight.toString === 'function' ? parseFloat(booking.weight.toString()) : parseFloat(booking.weight)) : 0
+                    const isVoided = String(status).toUpperCase() === 'VOIDED'
+                    return (
+                      <tr key={booking.id} className={`hover:bg-sky-50/50 transition-colors group ${isVoided ? 'bg-red-50/50' : ''}`}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-base font-black text-sky-700 tracking-tight">{booking.cnNumber}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-100 uppercase">
+                            {originName}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-gray-100 text-gray-700 uppercase">
+                            {destName}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-gray-900 leading-tight">{booking.shipperName || '—'}</span>
+                            <span className="text-[10px] text-gray-500 font-medium">{booking.shipperPhone || ''}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-gray-900 leading-tight">{booking.consigneeName || '—'}</span>
+                            <span className="text-[10px] text-gray-500 font-medium">{booking.consigneePhone || ''}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[11px] font-medium text-gray-700">
+                            {booking.service?.serviceName || booking.service?.name || booking.serviceId || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isVoided ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-100'}`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[11px] font-bold text-gray-700 uppercase">{String(payMode).toLowerCase()}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-medium text-gray-700">
+                          {booking.pieces ?? '—'} / {Number.isFinite(weightVal) ? weightVal : (booking.weight ?? '—')}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm font-black text-gray-900">
+                            {booking.totalAmount != null ? Number(booking.totalAmount).toLocaleString() : '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Printable Area - Only visible in print */}
-      <div className="hidden print:block w-full font-serif text-black p-4">
-        <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
-          <div className="flex items-center gap-4">
-            <img src="/nps-logo.png" alt="NPS Logo" className="h-14 w-auto" />
-            <div>
-              <h1 className="text-2xl font-black uppercase">Shift Closure Report</h1>
-              <p className="text-xs font-bold text-gray-600 tracking-widest">OFFICIAL SHIPPING SUMMARY</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-xl font-black text-sky-900 leading-tight">BATCH: {batchOptions.find(b => b.id === selectedBatchId)?.batchCode}</div>
-            <div className="text-[10px] space-y-0.5 mt-1">
-              <p>STATION: <span className="font-black tracking-wider text-black">{config?.stationCode || 'N/A'}</span></p>
-              <p>DATE: {new Date(selectedDate).toLocaleDateString()}</p>
-              <p>GENERATED BY: {config?.staffCode || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <table className="w-full mb-6 border-collapse border border-black">
-          <thead>
-            <tr className="bg-gray-100 border-b border-black text-[10px] font-black uppercase tracking-tight">
-              <th className="border border-black p-1 text-center">SR</th>
-              <th className="border border-black p-1 text-left">CN NUMBER</th>
-              <th className="border border-black p-1 text-left">SHIPPER</th>
-              <th className="border border-black p-1 text-left">CONSIGNEE</th>
-              <th className="border border-black p-1 text-left text-center">DEST</th>
-              <th className="border border-black p-1 text-center">MODE</th>
-              <th className="border border-black p-1 text-center">PCS/WGT</th>
-              <th className="border border-black p-1 text-right">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bookings.map((booking, index) => (
-              <tr key={booking.id} className="text-[10px] border-b border-black">
-                <td className="border border-black p-1.5 text-center font-bold">{index + 1}</td>
-                <td className="border border-black p-1.5 font-black text-sky-900">{booking.cnNumber}</td>
-                <td className="border border-black p-1.5">
-                  <div className="font-black text-[10px] uppercase truncate">{booking.shipperName}</div>
-                  <div className="text-[9px] opacity-70">{booking.shipperPhone}</div>
-                </td>
-                <td className="border border-black p-1.5">
-                  <div className="font-black text-[10px] uppercase truncate">{booking.consigneeName}</div>
-                  <div className="text-[9px] opacity-70">{booking.consigneePhone}</div>
-                </td>
-                <td className="border border-black p-1.5 font-bold text-center uppercase">{booking.destinationCity?.cityName || booking.destinationCity?.name || booking.destinationCityId}</td>
-                <td className="border border-black p-1.5 text-center font-black uppercase text-[8px]">{booking.payMode}</td>
-                <td className="border border-black p-1.5 text-center font-bold">{booking.pieces} / {booking.weight}</td>
-                <td className="border border-black p-1.5 text-right font-black italic">RS. {parseFloat(booking.totalAmount).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="bg-gray-50 font-black border-t border-black text-[11px]">
-              <td colSpan="6" className="border border-black p-2 text-right uppercase tracking-widest text-xs">Shift Total Summary</td>
-              <td className="border border-black p-2 text-center text-xs">
-                {bookings.reduce((sum, b) => sum + (parseInt(b.pieces) || 0), 0)} PCS / {bookings.reduce((sum, b) => sum + (parseFloat(b.weight) || 0), 0).toFixed(2)} KG
-              </td>
-              <td className="border border-black p-2 text-right text-xs">
-                RS. {bookings.reduce((sum, b) => sum + (parseFloat(b.totalAmount) || 0), 0).toLocaleString()}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div className="grid grid-cols-2 gap-20 mt-16 px-6">
-          <div className="border-t border-black pt-2 text-center">
-            <p className="text-[10px] font-black uppercase">Prepared By ({config?.staffCode || 'N/A'})</p>
-            <p className="text-[9px] text-gray-500 mt-1 uppercase italic font-bold">Courier Staff Signature</p>
-          </div>
-          <div className="border-t border-black pt-2 text-center">
-            <p className="text-transparent">.</p>
-            <p className="text-[10px] font-black uppercase">Authorized Signature & Stamp</p>
-            <p className="text-[9px] text-gray-500 mt-1 uppercase italic font-bold">Station Manager</p>
-          </div>
-        </div>
-
-        <div className="mt-12 text-[8px] text-gray-400 text-center flex justify-between uppercase font-bold tracking-widest border-t border-gray-100 pt-2">
-          <span>Printed on: {new Date().toLocaleString()}</span>
-          <span>Shift Close Summary Report - NPS Courier - Version 1.8</span>
-        </div>
       </div>
     </>
   )

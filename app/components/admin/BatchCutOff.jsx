@@ -1,15 +1,15 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
-import { Loader2, RefreshCw, CheckCircle, AlertCircle, PlusCircle, Power, PowerOff } from 'lucide-react'
+import { Loader2, RefreshCw, CheckCircle, AlertCircle, Scissors, PlusCircle } from 'lucide-react'
 
 export default function BatchCutOff() {
   const [config, setConfig] = useState(null)
   const [batches, setBatches] = useState([])
+  const [activeBatch, setActiveBatch] = useState(null) // { id, batchCode } from backend – used for display and cut-off API
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [currentBatchId, setCurrentBatchId] = useState('')
 
   useEffect(() => {
     fetchConfig()
@@ -31,17 +31,14 @@ export default function BatchCutOff() {
   const fetchBatches = async () => {
     try {
       const result = await api.getBatches()
-      // Handle both wrapped and unwrapped response, ensuring we get an array
       const data = Array.isArray(result) ? result : (result?.data || [])
       setBatches(data)
-
-      if (data.length > 0) {
-        const activeBatch = data.find(b => b.status === 'ACTIVE')
-        setCurrentBatchId(activeBatch ? activeBatch.batchCode : '')
-      }
+      const active = data.find(b => b.status === 'ACTIVE')
+      setActiveBatch(active ? { id: active.id, batchCode: active.batchCode } : null)
     } catch (err) {
       console.error('Error fetching batches:', err)
-      setBatches([]) // Fallback to empty array on error
+      setBatches([])
+      setActiveBatch(null)
     }
   }
 
@@ -50,11 +47,9 @@ export default function BatchCutOff() {
       setError('Incomplete system configuration (Station/Staff Code). Please update in Settings.')
       return
     }
-
     setIsLoading(true)
     setError('')
     setSuccess('')
-
     try {
       const newBatch = await api.createBatch({
         batchDate: new Date().toISOString().split('T')[0],
@@ -62,9 +57,8 @@ export default function BatchCutOff() {
         routeCode: config.routeCode,
         staffCode: config.staffCode
       })
-
-      setCurrentBatchId(newBatch.batchCode)
-      setSuccess(`New Batch ${newBatch.batchCode} generated!`)
+      setActiveBatch(newBatch ? { id: newBatch.id, batchCode: newBatch.batchCode } : null)
+      setSuccess(`New Batch ${newBatch?.batchCode || ''} generated!`)
       fetchBatches()
     } catch (err) {
       console.error('Error creating batch:', err)
@@ -74,18 +68,22 @@ export default function BatchCutOff() {
     }
   }
 
-  const handleToggleStatus = async (batchId, currentStatus) => {
+  const handleBatchCutOff = async () => {
+    if (!activeBatch?.id) {
+      setError('No active batch to cut off.')
+      return
+    }
     setIsLoading(true)
     setError('')
     setSuccess('')
     try {
-      const newStatus = currentStatus === 'ACTIVE' ? 'CLOSED' : 'ACTIVE'
-      await api.updateBatchStatus(batchId, newStatus)
-      setSuccess(`Batch status updated to ${newStatus}`)
+      await api.updateBatchStatus(activeBatch.id, 'CLOSED')
+      setSuccess(`Batch ${activeBatch.batchCode} has been cut off. Shift closed.`)
+      setActiveBatch(null)
       fetchBatches()
     } catch (err) {
-      console.error('Error updating status:', err)
-      setError(err.message || 'Failed to update status.')
+      console.error('Error cutting off batch:', err)
+      setError(err.message || 'Failed to perform batch cut-off.')
     } finally {
       setIsLoading(false)
     }
@@ -106,33 +104,56 @@ export default function BatchCutOff() {
       {/* Main Generation Card */}
       {/* Main Stats/Config Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {/* Active Batch Card */}
+        {/* Active Batch Card – batch ID from backend until cut off */}
         <div className="bg-gradient-to-br from-sky-600 to-sky-700 rounded-xl shadow-md p-6 text-white relative overflow-hidden flex flex-col justify-between">
           <div className="relative z-10">
-            <h3 className="text-sm font-bold opacity-80 uppercase tracking-widest mb-4">Current Active Batch</h3>
-            {currentBatchId ? (
+            <h3 className="text-sm font-bold opacity-80 uppercase tracking-widest mb-4">Current Active Batch (from backend)</h3>
+            {activeBatch?.batchCode ? (
               <div className="flex items-center gap-3 bg-white bg-opacity-10 p-3 rounded-lg border border-white border-opacity-10">
-                <span className="text-2xl font-black tracking-tight">{currentBatchId}</span>
+                <span className="text-2xl font-black tracking-tight">{activeBatch.batchCode}</span>
                 <span className="bg-green-400 text-green-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Active</span>
               </div>
             ) : (
               <div className="bg-white bg-opacity-5 p-3 rounded-lg border border-dashed border-white border-opacity-20">
                 <p className="text-lg font-bold opacity-40 italic">No Active Batch</p>
+                <p className="text-xs opacity-60 mt-1">Create a new batch or refresh after cut-off.</p>
               </div>
             )}
           </div>
 
-          <div className="mt-6 flex gap-2 relative z-10">
+          <div className="mt-6 flex flex-col gap-2 relative z-10">
+            {activeBatch?.id && (
+              <button
+                type="button"
+                onClick={handleBatchCutOff}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black rounded-lg border border-amber-400 shadow-lg disabled:opacity-60 transition-all"
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Scissors className="w-5 h-5" />}
+                Perform Batch Cut Off
+              </button>
+            )}
+            {!activeBatch?.id && (
+              <button
+                type="button"
+                onClick={handleCreateBatch}
+                disabled={isLoading || !config?.stationCode || !config?.staffCode}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg border border-emerald-400 disabled:opacity-50 transition-all"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-5 h-5" />}
+                Create New Batch
+              </button>
+            )}
             <button
+              type="button"
               onClick={fetchBatches}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-sky-500 bg-opacity-30 text-white font-bold rounded-lg border border-white border-opacity-10 hover:bg-opacity-40 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-3 py-3 bg-sky-500 bg-opacity-30 text-white font-bold rounded-lg border border-white border-opacity-10 hover:bg-opacity-40 transition-all"
             >
               <RefreshCw className="w-4 h-4" />
-              REFRESH DATA
+              Refresh data
             </button>
           </div>
 
-          {/* Decorative background circle */}
           <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
         </div>
 

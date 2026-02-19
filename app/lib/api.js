@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://operations.nps.com.pk/api/v1'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'
 
 /**
  * API utility functions
@@ -343,6 +343,18 @@ export const api = {
     })
     return this.handleResponse(response)
   },
+
+  /**
+   * Get next CN number for COD product. Use when user selects COD service in booking form.
+   * @returns {Promise<{ cnNumber: string }>}
+   */
+  async getNextCnCod() {
+    const response = await this.request('/consignments/next-cn-cod', {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
   /**
    * Void a consignment by CN number
    * @param {string} cnNumber - CN number
@@ -401,6 +413,14 @@ export const api = {
     const response = await this.request('/batches', {
       method: 'POST',
       body: JSON.stringify(batchData),
+    })
+    return this.handleResponse(response)
+  },
+
+  async createBatchForUser() {
+    const response = await this.request('/batches/for-user', {
+      method: 'POST',
+      body: JSON.stringify({}),
     })
     return this.handleResponse(response)
   },
@@ -899,7 +919,7 @@ export const api = {
   },
 
   /**
-   * Delete or deactivate a service
+   * Permanently delete a service (fails if used in bookings)
    * @param {string} id - Service ID
    * @returns {Promise<object>} - Result
    */
@@ -938,12 +958,35 @@ export const api = {
   },
 
   /**
-   * Delete or deactivate a city
+   * Permanently delete a city (fails if used in rules, bookings, etc.)
    * @param {string} id - City ID
    * @returns {Promise<object>} - Result
    */
   async deleteCity(id) {
     const response = await this.request(`/pricing/cities/${id}`, {
+      method: 'DELETE',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Get attestation categories (defaults + from DB)
+   * @returns {Promise<Array<{key: string, display: string}>>}
+   */
+  async getAttestationCategories() {
+    const response = await this.request('/pricing/attestation-categories', { method: 'GET' })
+    const res = await this.handleResponse(response)
+    const arr = res?.data ?? res
+    return Array.isArray(arr) ? arr : []
+  },
+
+  /**
+   * Permanently delete attestation category and all its subservices
+   * @param {string} categoryKey - Category key (e.g. NPS, Embassy)
+   * @returns {Promise<{deleted: number}>}
+   */
+  async deleteAttestationCategory(categoryKey) {
+    const response = await this.request(`/pricing/attestation-categories/${encodeURIComponent(categoryKey)}`, {
       method: 'DELETE',
     })
     return this.handleResponse(response)

@@ -11,10 +11,22 @@ import UserShipper from './UserShipper'
 import UserConsignee from './UserConsignee'
 import UserOtherAmountSection from './UserOtherAmountSection'
 import SubservicesModal from '../../admin/bookings/SubservicesModal'
+import OnTimeDeliveryModal from '../../admin/bookings/OnTimeDeliveryModal'
 
 export default function UserBookingConsignment() {
   const dispatch = useDispatch()
   const { rules: reduxRules, cities, services: reduxServices, isLoading: pricingLoading } = useSelector((state) => state.pricing)
+  const ATTESTATION_SERVICE_VALUES = [
+    'ATS - Doc MOFA Attestation',
+    'ATR - Doc MOFA Home Delivery',
+    'APN - Apostille Normal',
+    'APU - Apostille Urgent',
+    'AE - UAE Embassy',
+    'BV - Board Verification',
+    'HEC - HEC',
+    'IBCC - IBCC',
+    'National Bureau',
+  ]
 
 
   const [showMofaModal, setShowMofaModal] = useState(false)
@@ -67,7 +79,10 @@ export default function UserBookingConsignment() {
     otherAmount: '',
     totalAmount: 0,
     originCity: '', // Should be set based on user profile/selection
+    preferredDeliveryDate: '',
+    preferredDeliveryTime: '',
   })
+  const [showOnTimeDeliveryModal, setShowOnTimeDeliveryModal] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
@@ -78,8 +93,37 @@ export default function UserBookingConsignment() {
     dispatch(fetchAllPricing())
   }, [dispatch])
 
+  // CN Number: when customer selects COD product, get next CN from API (same format as admin)
+  useEffect(() => {
+    if (!formData.product) {
+      setFormData(prev => ({ ...prev, cnNumber: '' }))
+      return
+    }
+    if (formData.product === 'COD') {
+      api.getNextCnCod()
+        .then((res) => {
+          const data = res?.data ?? res
+          const cn = data?.cnNumber ?? data?.cn ?? ''
+          setFormData(prev => ({ ...prev, cnNumber: cn }))
+        })
+        .catch((err) => {
+          setFormData(prev => ({ ...prev, cnNumber: '' }))
+          setToast({
+            isVisible: true,
+            message: err?.message || 'Could not get CN number. Please try again.',
+            type: 'error',
+          })
+        })
+      return
+    }
+    setFormData(prev => ({ ...prev, cnNumber: '' }))
+  }, [formData.product])
+
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    if (name === 'services' && value === 'On Time Service' && formData.product === 'General') {
+      setShowOnTimeDeliveryModal(true)
+    }
     setFormData(prev => {
       const updated = {
         ...prev,
@@ -109,43 +153,18 @@ export default function UserBookingConsignment() {
     const service = (formData.services || '').trim()
     const product = (formData.product || '').trim()
 
-    // Handle Attestation product services - show subservices modal
-    if (product === 'Attestation' && service) {
-      const attestationServices = [
-        'NPS All Services',
-        'Embassies Attestation',
-        'Educational Documents Attestation',
-        'Special Documents',
-        'Translation of any embassy',
-      ]
-      
-      // Check if service matches any attestation service (case-insensitive for safety)
-      const matchedService = attestationServices.find(
-        (as) => as.toLowerCase() === service.toLowerCase()
-      )
-      
-      if (matchedService) {
-        console.log('Opening subservices modal for attestation service:', matchedService, 'Original:', service)
-        // Always open the modal first
-        setShowSubservicesModal(true)
-        
-        // Fetch subservices if not already cached (modal will handle loading state)
-        // Note: Modal will also fetch, but we can pre-fetch here for better UX
-        if (!subservicesData[matchedService]) {
-          api.getSubservices(matchedService)
-            .then((data) => {
-              const subservices = Array.isArray(data) ? data : data?.data || []
-              setSubservicesData((prev) => ({
-                ...prev,
-                [matchedService]: subservices,
-              }))
-            })
-            .catch((err) => {
-              console.error('Error fetching subservices:', err)
-            })
-        }
-        return
+    // Handle Attestation services (shown under General) - show subservices modal
+    if (service && ATTESTATION_SERVICE_VALUES.includes(service)) {
+      setShowSubservicesModal(true)
+      if (!subservicesData[service]) {
+        api.getSubservices(service)
+          .then((data) => {
+            const subservices = Array.isArray(data) ? data : data?.data || []
+            setSubservicesData((prev) => ({ ...prev, [service]: subservices }))
+          })
+          .catch((err) => console.error('Error fetching subservices:', err))
       }
+      return
     }
 
     // Handle other document modals
@@ -177,8 +196,9 @@ export default function UserBookingConsignment() {
         return 0
       }
 
-      // Origin and Destination are required for non-Attestation products
-      if (product !== 'Attestation' && (!originCity || !destination)) {
+      const isAttestationServiceSelected = ATTESTATION_SERVICE_VALUES.includes(services)
+      // Origin and Destination are required for non-Attestation services
+      if (!isAttestationServiceSelected && (!originCity || !destination)) {
         return 0
       }
 
@@ -195,8 +215,7 @@ export default function UserBookingConsignment() {
       // 2. Find matching rules
       let applicableRules = []
 
-      if (product === 'Attestation') {
-        // Attestation rates are primarily service-based
+      if (ATTESTATION_SERVICE_VALUES.includes(services)) {
         applicableRules = reduxRules.filter(r =>
           r.service?.serviceName === services &&
           r.service?.serviceType === 'Attestation'
@@ -259,9 +278,9 @@ export default function UserBookingConsignment() {
     const docs = getSelectedDocuments()
     const docsTotal = docs.reduce((sum, doc) => sum + (doc.price || 0), 0)
 
-    // Calculate subservices total for Attestation services
+    // Calculate subservices total for Attestation services (by service name; product can be General)
     let subservicesTotal = 0
-    if (formData.product === 'Attestation' && selectedSubservices.length > 0 && formData.services) {
+    if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && selectedSubservices.length > 0 && formData.services) {
       const currentSubservices = subservicesData[formData.services] || []
       subservicesTotal = selectedSubservices.reduce((total, id) => {
         const subservice = currentSubservices.find((s) => s.id === id)
@@ -289,9 +308,7 @@ export default function UserBookingConsignment() {
     if (hasRequiredFields && rate > 0) {
       finalRate = rate
       totalAmount = (rate * pcs) + docTotal + other + subservices
-    } else if (formData.product === 'Attestation' && (subservices > 0 || docTotal > 0 || other > 0 || formData.services)) {
-      // For Attestation, allow total even without rate/weight/origin/destination if subservices/documents/other amounts are selected
-      // Also allow if a service is selected, even if no subservices are picked yet (to show 0 initially)
+    } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && (subservices > 0 || docTotal > 0 || other > 0 || formData.services)) {
       totalAmount = docTotal + other + subservices
     }
 
@@ -696,15 +713,19 @@ export default function UserBookingConsignment() {
       // For "Blue Box Xkg" services, send service "Blue Box" so backend resolves correctly; weight is already set
       const effectiveServiceId = formData.services && formData.services.match(/^Blue Box (\d+)kg$/) ? 'Blue Box' : formData.services
 
+      const effectiveProductId = ATTESTATION_SERVICE_VALUES.includes(formData.services) ? 'Attestation' : formData.product
       const bookingData = {
-        productId: formData.product,
+        productId: effectiveProductId,
         serviceId: effectiveServiceId,
         destinationCityId: formData.destination,
         originCityId: formData.originCity,
+        cnNumber: formData.cnNumber || undefined,
         pieces: parseInt(formData.pieces || '1'),
         handlingInstructions: formData.handlingInstructions || undefined,
         packetContent: formData.packetContent,
         payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
+        preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
+        preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
         weight: parseFloat(formData.weight || '0'),
         volumetricWeight: parseFloat(formData.volumetricWeight || '0') || undefined,
 
@@ -779,7 +800,9 @@ export default function UserBookingConsignment() {
         consigneeZipCode: '',
         otherAmount: '',
         totalAmount: 0,
-        originCity: ''
+        originCity: '',
+        preferredDeliveryDate: '',
+        preferredDeliveryTime: '',
       })
       setSelectedDocuments([])
       setDocumentFiles([])
@@ -834,6 +857,7 @@ export default function UserBookingConsignment() {
         selectedSubservices={selectedSubservices}
         onOpenSubservicesModal={() => setShowSubservicesModal(true)}
         subservicesData={subservicesData}
+        onOpenOnTimeDeliveryModal={() => setShowOnTimeDeliveryModal(true)}
       />
 
       {/* Shipper Section */}
@@ -872,6 +896,21 @@ export default function UserBookingConsignment() {
           setSubservicesData((prev) => ({
             ...prev,
             [serviceName]: subservices,
+          }))
+        }}
+      />
+
+      {/* On Time Service – delivery date & time */}
+      <OnTimeDeliveryModal
+        isOpen={showOnTimeDeliveryModal}
+        onClose={() => setShowOnTimeDeliveryModal(false)}
+        initialDate={formData.preferredDeliveryDate}
+        initialTime={formData.preferredDeliveryTime}
+        onConfirm={(date, time) => {
+          setFormData(prev => ({
+            ...prev,
+            preferredDeliveryDate: date,
+            preferredDeliveryTime: time,
           }))
         }}
       />

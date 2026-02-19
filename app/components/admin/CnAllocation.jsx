@@ -6,8 +6,7 @@ export default function CnAllocation() {
   const [stationCode, setStationCode] = useState('')
   const [formData, setFormData] = useState({
     productId: '',
-    startCnNumber: '',
-    endCnNumber: '',
+    cn: '',
   })
   const [message, setMessage] = useState({ type: '', text: '' })
 
@@ -36,40 +35,20 @@ export default function CnAllocation() {
 
   const handleSave = () => {
     setMessage({ type: '', text: '' })
-    const { productId, startCnNumber, endCnNumber } = formData
+    const { productId, cn } = formData
 
-    if (!productId || !startCnNumber || !endCnNumber) {
-      setMessage({ type: 'error', text: 'Please fill all fields' })
+    if (!productId || !cn || String(cn).trim() === '') {
+      setMessage({ type: 'error', text: 'Please select a product and enter Cn.' })
       return
     }
 
-    // Validation removed as per user request
-    // if (parseInt(startCnNumber) > parseInt(endCnNumber)) {
-    //   setMessage({ type: 'error', text: 'Start CN must be less than End CN' })
-    //   return
-    // }
-
     try {
-      // Get existing allocations
       const existingAllocations = JSON.parse(localStorage.getItem('cnAllocations') || '{}')
-
-      // Concatenate Start and End to form the CN Number (Single Allocation)
-      // As per user request: "123" + "111" = "123111"
-      const fullCn = String(startCnNumber) + String(endCnNumber)
-
-      // Update allocation for this product
-      existingAllocations[productId] = {
-        start: fullCn,
-        end: fullCn,
-        next: fullCn
-      }
-
+      const cnValue = String(cn).trim()
+      existingAllocations[productId] = { next: cnValue }
       localStorage.setItem('cnAllocations', JSON.stringify(existingAllocations))
-      setMessage({ type: 'success', text: `CN ${fullCn} allocated successfully!` })
-
-      // Optional: Clear form
-      setFormData(prev => ({ ...prev, startCnNumber: '', endCnNumber: '' }))
-
+      setMessage({ type: 'success', text: `Cn ${cnValue} allocated successfully. It will increment on each booking.` })
+      setFormData(prev => ({ ...prev, cn: '' }))
     } catch (error) {
       console.error('Error saving to localStorage:', error)
       setMessage({ type: 'error', text: 'Failed to save allocation.' })
@@ -114,34 +93,22 @@ export default function CnAllocation() {
             </select>
           </div>
 
-          {/* Enter Start CN No. */}
+          {/* Cn – single value; booking will increment it on use */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter Start CN No.
+              Cn
             </label>
             <input
-              type="number"
-              name="startCnNumber"
-              value={formData.startCnNumber}
+              type="text"
+              name="cn"
+              value={formData.cn}
               onChange={handleChange}
-              placeholder="Enter starting CN number"
+              placeholder="Enter Cn (e.g. 123111)"
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
-          </div>
-
-          {/* Enter End CN No. */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter End CN No.
-            </label>
-            <input
-              type="number"
-              name="endCnNumber"
-              value={formData.endCnNumber}
-              onChange={handleChange}
-              placeholder="Enter ending CN number"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-            />
+            <p className="text-xs text-gray-500 mt-1">
+              This value is used for the next booking and increments automatically after each booking.
+            </p>
           </div>
 
           {/* Station Code */}

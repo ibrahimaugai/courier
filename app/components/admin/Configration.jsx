@@ -1,14 +1,17 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
-import { setBatchInfo, logout } from '../../lib/store'
-import { Loader2, CheckCircle, AlertCircle, LogOut, ShieldCheck, RefreshCw } from 'lucide-react'
+import { setBatchInfo, logout, fetchAllPricing } from '../../lib/store'
+import { Loader2, CheckCircle, AlertCircle, LogOut, ShieldCheck, RefreshCw, MapPin } from 'lucide-react'
+
+const BOOKING_DEFAULT_ORIGIN_KEY = 'bookingDefaultOriginCityId'
 
 export default function Configuration() {
   const dispatch = useDispatch()
   const router = useRouter()
+  const { cities } = useSelector((state) => state.pricing)
   const [formData, setFormData] = useState({
     routeCode: '',
     staffCode: '',
@@ -24,6 +27,37 @@ export default function Configuration() {
   useEffect(() => {
     fetchConfiguration()
   }, [])
+
+  // Ensure cities are loaded for station/origin dropdown
+  useEffect(() => {
+    if (!cities?.length) dispatch(fetchAllPricing())
+  }, [dispatch, cities?.length])
+
+  // When cities load after config, sync default origin to localStorage for booking form
+  useEffect(() => {
+    if (formData.stationCode && cities?.length) {
+      const cityId = cities.find(
+        (c) => c.cityCode === formData.stationCode || c.id === formData.stationCode
+      )?.id
+      if (cityId) localStorage.setItem(BOOKING_DEFAULT_ORIGIN_KEY, cityId)
+    }
+  }, [cities, formData.stationCode])
+
+  const handleStationOriginChange = (e) => {
+    const cityId = e.target.value
+    const city = (cities || []).find((c) => c.id === cityId)
+    const code = city ? city.cityCode || cityId : cityId
+    setFormData({ ...formData, stationCode: code })
+    if (cityId) {
+      localStorage.setItem(BOOKING_DEFAULT_ORIGIN_KEY, cityId)
+    } else {
+      localStorage.removeItem(BOOKING_DEFAULT_ORIGIN_KEY)
+    }
+  }
+
+  const selectedStationOriginId = (cities || []).find(
+    (c) => c.cityCode === formData.stationCode || c.id === formData.stationCode
+  )?.id ?? formData.stationCode ?? ''
 
   const fetchConfiguration = async () => {
     try {
@@ -47,6 +81,12 @@ export default function Configuration() {
           printerConnection: configData.printerConnection || ''
         }
         setFormData(newFormData)
+        if (configData.stationCode && cities?.length) {
+          const cityId = cities.find(
+            (c) => c.cityCode === configData.stationCode || c.id === configData.stationCode
+          )?.id
+          if (cityId) localStorage.setItem(BOOKING_DEFAULT_ORIGIN_KEY, cityId)
+        }
       }
     } catch (err) {
       console.error('Error fetching configuration:', err)
@@ -183,19 +223,30 @@ export default function Configuration() {
               />
             </div>
 
-            {/* Station Code */}
-            <div>
+            {/* Current Station / Default origin for booking (saved as stationCode in backend) */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">
-                Current Station (Origin)
+                Default origin for booking (Current Station)
               </label>
-              <input
-                type="text"
-                required
-                value={formData.stationCode}
-                onChange={(e) => setFormData({ ...formData, stationCode: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
-                placeholder="Enter station code"
-              />
+              <div className="flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-sky-500 shrink-0" />
+                <select
+                  required
+                  value={selectedStationOriginId}
+                  onChange={handleStationOriginChange}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all bg-white"
+                >
+                  <option value="">Select default origin (current station)</option>
+                  {(cities || []).map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.cityName} {city.cityCode ? `(${city.cityCode})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Stored as station code in backend. This origin is pre-filled on the booking form.
+              </p>
             </div>
           </div>
 

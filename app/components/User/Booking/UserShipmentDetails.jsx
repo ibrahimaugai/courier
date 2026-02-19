@@ -29,7 +29,33 @@ export default function UserShipmentDetails({
   selectedSubservices = [],
   onOpenSubservicesModal,
   subservicesData = {},
+  onOpenOnTimeDeliveryModal,
 }) {
+  const ATTESTATION_SERVICE_VALUES = [
+    'ATS - Doc MOFA Attestation',
+    'ATR - Doc MOFA Home Delivery',
+    'APN - Apostille Normal',
+    'APU - Apostille Urgent',
+    'AE - UAE Embassy',
+    'BV - Board Verification',
+    'HEC - HEC',
+    'IBCC - IBCC',
+    'National Bureau',
+  ]
+  const isOnTimeService = formData.product === 'General' && formData.services === 'On Time Service'
+  const hasPreferredDelivery = !!(formData.preferredDeliveryDate || formData.preferredDeliveryTime)
+  const formatDeliveryDate = (dateStr) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr + 'T12:00:00')
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+  const formatDeliveryTime = (timeStr) => {
+    if (!timeStr) return ''
+    const [h, m] = timeStr.split(':').map(Number)
+    if (h === 12) return `12:${String(m || 0).padStart(2, '0')} PM`
+    if (h === 0) return `12:${String(m || 0).padStart(2, '0')} AM`
+    return `${h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+  }
   // Use all active cities (removed restrictive whitelist for consistency with admin)
   const activeCities = useMemo(() => {
     const all = cities || []
@@ -108,43 +134,25 @@ export default function UserShipmentDetails({
 
   const documentSection = getDocumentSectionInfo()
 
-  // Check if current service is an attestation service that needs subservices
+  // Check if current service is an attestation service that needs subservices (by service name; product can be General)
   const isAttestationService = useMemo(() => {
-    if (formData.product !== 'Attestation' || !formData.services) return false
-    const attestationServices = [
-      'NPS All Services',
-      'Embassies Attestation',
-      'Educational Documents Attestation',
-      'Special Documents',
-      'Translation of any embassy',
-    ]
-    return attestationServices.includes(formData.services)
-  }, [formData.product, formData.services])
+    return formData.services ? ATTESTATION_SERVICE_VALUES.includes(formData.services) : false
+  }, [formData.services])
 
   // Get dynamic services based on selected product from database
   const availableServices = useMemo(() => {
     if (!formData.product) return []
     
-    // For Attestation product, show category services instead of individual services
-    if (formData.product === 'Attestation') {
-      return [
-        { value: 'NPS All Services', label: 'NPS All Services' },
-        { value: 'Embassies Attestation', label: 'Embassies Attestation' },
-        { value: 'Educational Documents Attestation', label: 'Educational Documents Attestation' },
-        { value: 'Special Documents', label: 'Special Documents' },
-        { value: 'Translation of any embassy', label: 'Translation of any embassy' },
-      ]
-    }
-    
-    // For General product: exclude "Blue Box" and add Blue Box 1kg–10kg, 15kg, 20kg, 25kg (ordered by weight)
+    // For General product: General services + Blue Box tiers + all attestation services
     if (formData.product === 'General') {
       const fromDb = (services || [])
         .filter(s => s && s.serviceType === 'General' && (!s.status || s.status.toLowerCase() === 'active'))
         .map(s => ({ value: s.serviceName, label: s.serviceName }))
-        .filter(s => s.value !== 'Blue Box') // remove generic Blue Box
+        .filter(s => s.value !== 'Blue Box')
         .sort((a, b) => a.label.localeCompare(b.label))
       const blueBoxOptions = BLUE_BOX_WEIGHT_SERVICES.map(name => ({ value: name, label: name }))
-      return [...fromDb, ...blueBoxOptions] // Blue Box options already in weight order (1–10, 15, 20, 25)
+      const attestationOptions = ATTESTATION_SERVICE_VALUES.map(name => ({ value: name, label: name }))
+      return [...fromDb, ...blueBoxOptions, ...attestationOptions]
     }
     
     // For other products, use services from database
@@ -189,12 +197,6 @@ export default function UserShipmentDetails({
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors disabled:bg-gray-100 italic"
               >
                 <option value="" disabled>Select Product</option>
-                <option value="General">General</option>
-                <option value="International">International</option>
-                <option value="OLE">OLE</option>
-                <option value="Logistics">Logistics</option>
-                <option value="Sentiments">Sentiments</option>
-                <option value="Attestation">Attestation</option>
                 <option value="COD">COD</option>
               </select>
             </div>
@@ -333,6 +335,32 @@ export default function UserShipmentDetails({
                   </option>
                 ))}
               </select>
+              {/* On Time Service – delivery date/time preview */}
+              {isOnTimeService && (
+                <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                  <p className="text-xs font-semibold text-sky-700 uppercase tracking-wider mb-1">Preferred delivery (On Time Service)</p>
+                  {hasPreferredDelivery ? (
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900">
+                        {formData.preferredDeliveryDate && formatDeliveryDate(formData.preferredDeliveryDate)}
+                        {formData.preferredDeliveryDate && formData.preferredDeliveryTime && ' at '}
+                        {formData.preferredDeliveryTime && formatDeliveryTime(formData.preferredDeliveryTime)}
+                      </span>
+                      {!isReadOnly && onOpenOnTimeDeliveryModal && (
+                        <button
+                          type="button"
+                          onClick={onOpenOnTimeDeliveryModal}
+                          className="text-xs font-semibold text-sky-600 hover:text-sky-800 underline"
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">Select date & time in the pop-up or click service again to open.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Pay Mode */}

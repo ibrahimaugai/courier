@@ -216,6 +216,16 @@ enum CnAllocationStatus {
   EXPIRED
 }
 
+// Reserved CNs for COD (next-cn-cod) so the same format as booking API is used
+model CnReservation {
+  id        String   @id @default(uuid())
+  cnNumber  String   @unique @map("cn_number")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("cn_reservations")
+}
+
 // ============================================
 // BATCHES
 // ============================================
@@ -658,9 +668,11 @@ model Booking {
   cnAllocationId  String?       @map("cn_allocation_id")
 
   // Additional Fields
-  dcReferenceNo String? @map("dc_reference_no")
-  manualCn      String? @map("manual_cn")
-  cancelReason  String? @map("cancel_reason")
+  dcReferenceNo           String?   @map("dc_reference_no")
+  manualCn                String?   @map("manual_cn")
+  cancelReason            String?   @map("cancel_reason")
+  preferredDeliveryDate   DateTime? @map("preferred_delivery_date")
+  preferredDeliveryTime   String?   @map("preferred_delivery_time")
 
   // Metadata
   createdBy   String    @map("created_by")

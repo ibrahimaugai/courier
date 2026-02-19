@@ -40,44 +40,43 @@ export default function AttestationPricingTable({ services, onUpdateRate }) {
         }
     }
 
-    // Group services by category
+    // Group services by category (aligned with new attestation categories)
+    const inferCategory = (svc) => {
+        const cat = (svc.attestationCategory || '').trim()
+        if (cat) {
+            const map = { ATS: 'ATS - Doc MOFA Attestation', ATR: 'ATR - Doc MOFA Home Delivery', APN: 'APN - Apostille Normal', APU: 'APU - Apostille Urgent', AE: 'AE - UAE Embassy', BV: 'BV - Board Verification', HEC: 'HEC - HEC', IBCC: 'IBCC - IBCC', NationalBureau: 'National Bureau' }
+            return map[cat] || cat
+        }
+        const name = (svc.serviceName || '').toLowerCase()
+        if (name.includes('mofa') && (name.includes('doc') || name.includes('attestation'))) return 'ATS - Doc MOFA Attestation'
+        if (name.includes('mofa') && name.includes('home delivery')) return 'ATR - Doc MOFA Home Delivery'
+        if (name.includes('apostille') && name.includes('normal')) return 'APN - Apostille Normal'
+        if (name.includes('apostille') && (name.includes('urgent') || name.includes('urgnt'))) return 'APU - Apostille Urgent'
+        if (name.includes('uae') && name.includes('embassy')) return 'AE - UAE Embassy'
+        if (name.includes('board') && name.includes('verification')) return 'BV - Board Verification'
+        if (name.includes('hec')) return 'HEC - HEC'
+        if (name.includes('ibcc')) return 'IBCC - IBCC'
+        if (name.includes('national bureau') || name.includes('national beuro')) return 'National Bureau'
+        return 'Other'
+    }
+
     const groupedServices = services.reduce((acc, service) => {
-        let category = 'Other'
-        const name = service.serviceName
-        const lowerName = name.toLowerCase()
-
-        // Exact matches or specific grouping logic (Case Insensitive)
-        if (lowerName.includes('mofa general') ||
-            lowerName.includes('apostille urgent single') ||
-            lowerName.includes('appostille file urgent') ||
-            lowerName.includes('national beuro')) {
-            category = 'NPS All Services'
-        } else if (lowerName.includes('embassy') || lowerName.includes('culture') || lowerName.includes('saudia')) {
-            category = 'Embassies Attestation'
-        } else if (lowerName.includes('hec') || lowerName.includes('university') ||
-            lowerName.includes('ibcc') || lowerName.includes('board') ||
-            lowerName.includes('borad') || lowerName.includes('enquivalence')) {
-            category = 'Educational Documents Attestation'
-        } else if (lowerName.includes('marriage') || lowerName.includes('divorce') ||
-            lowerName.includes('stamp paper') || lowerName.includes('commercial documents')) {
-            category = 'Special Documents'
-        } else if (lowerName === 'translation') {
-            category = 'Translation of any embassy'
-        }
-
-        if (!acc[category]) {
-            acc[category] = []
-        }
+        const category = inferCategory(service)
+        if (!acc[category]) acc[category] = []
         acc[category].push(service)
         return acc
     }, {})
 
     const categoryOrder = [
-        'NPS All Services',
-        'Embassies Attestation',
-        'Educational Documents Attestation',
-        'Special Documents',
-        'Translation of any embassy',
+        'ATS - Doc MOFA Attestation',
+        'ATR - Doc MOFA Home Delivery',
+        'APN - Apostille Normal',
+        'APU - Apostille Urgent',
+        'AE - UAE Embassy',
+        'BV - Board Verification',
+        'HEC - HEC',
+        'IBCC - IBCC',
+        'National Bureau',
         'Other'
     ]
 

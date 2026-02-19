@@ -25,7 +25,7 @@ export class ConfigurationService {
     }
 
     async updateConfiguration(userId: string, updateConfigDto: UpdateConfigurationDto) {
-        const { stationCode, ...rest } = updateConfigDto;
+        const { stationCode, defaultOriginCityId, ...rest } = updateConfigDto;
 
         // Use upsert to create or update user's configuration
         return this.prisma.configuration.upsert({
@@ -36,6 +36,7 @@ export class ConfigurationService {
                 stationCode,
                 // @ts-ignore
                 stationId: null,
+                defaultOriginCityId: defaultOriginCityId ?? undefined,
                 updatedBy: userId,
             },
             create: {
@@ -44,6 +45,7 @@ export class ConfigurationService {
                 stationCode,
                 // @ts-ignore
                 stationId: null,
+                defaultOriginCityId: defaultOriginCityId ?? undefined,
                 userId,
                 updatedBy: userId,
             },

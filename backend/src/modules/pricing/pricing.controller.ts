@@ -118,7 +118,7 @@ export class PricingController {
 
   @Delete('services/:id')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Delete or deactivate a service' })
+  @ApiOperation({ summary: 'Permanently delete a service (fails if used in bookings)' })
   async deleteService(@Param('id') id: string) {
     return await this.pricingService.deleteService(id);
   }
@@ -146,8 +146,22 @@ export class PricingController {
 
   @Delete('cities/:id')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Delete or deactivate a city' })
+  @ApiOperation({ summary: 'Permanently delete a city' })
   async deleteCity(@Param('id') id: string) {
     return await this.pricingService.deleteCity(id);
+  }
+
+  @Get('attestation-categories')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.USER)
+  @ApiOperation({ summary: 'Get attestation categories (for service management)' })
+  async getAttestationCategories() {
+    return await this.pricingService.getAttestationCategories();
+  }
+
+  @Delete('attestation-categories/:categoryKey')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Permanently delete an attestation category and all its subservices' })
+  async deleteAttestationCategory(@Param('categoryKey') categoryKey: string) {
+    return await this.pricingService.deleteAttestationCategory(decodeURIComponent(categoryKey));
   }
 }

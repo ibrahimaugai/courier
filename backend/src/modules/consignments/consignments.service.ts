@@ -8,7 +8,7 @@ import { PrismaService } from '../database/prisma.service';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
 import { CreateConsignmentDto } from './dto/create-consignment.dto';
 import { CnGenerator } from '../../common/utils/cn-generator';
-import { PaymentMode, BookingStatus } from '@prisma/client';
+import { PaymentMode, BookingStatus, Prisma } from '@prisma/client';
 
 import { BatchesService } from '../batches/batches.service';
 
@@ -425,21 +425,15 @@ export class ConsignmentsService {
           ? volumetricWeight
           : createConsignmentDto.weight;
 
-      // 5. Handle Batch - Auto-assign or Create if missing (only for admin bookings)
+      // 5. Handle Batch - Auto-assign for both admin and customer (USER) bookings
       let batchId = createConsignmentDto.batchId;
       let batchCode = createConsignmentDto.batchCode;
 
       if (!batchId) {
-        // Only auto-assign batch for admin bookings (customers don't need batches)
-        if (isAdmin) {
-          const activeBatch = await this.batchesService.ensureActiveBatch(createdBy, tx);
-          batchId = activeBatch.id;
-          batchCode = activeBatch.batchCode;
-        } else {
-          // For customer bookings, set batch to null (no batch required)
-          batchId = null;
-          batchCode = null;
-        }
+        // Ensure active batch for user (admin: from config; USER: username-YYYYMMDD-N)
+        const activeBatch = await this.batchesService.ensureActiveBatch(createdBy, tx);
+        batchId = activeBatch.id;
+        batchCode = activeBatch.batchCode;
       }
 
       // Create booking
@@ -488,6 +482,10 @@ export class ConsignmentsService {
           createdBy,
           batchId,
           batchCode,
+          preferredDeliveryDate: createConsignmentDto.preferredDeliveryDate
+            ? new Date(createConsignmentDto.preferredDeliveryDate)
+            : undefined,
+          preferredDeliveryTime: createConsignmentDto.preferredDeliveryTime ?? undefined,
         },
         include: {
           customer: true,
@@ -504,6 +502,13 @@ export class ConsignmentsService {
           },
         },
       });
+
+      // If CN was provided (e.g. from COD next-cn-cod), clear the reservation
+      if (createConsignmentDto.cnNumber) {
+        await tx.$executeRaw(
+          Prisma.sql`DELETE FROM cn_reservations WHERE cn_number = ${createConsignmentDto.cnNumber}`,
+        );
+      }
 
       // Create booking history entry
       await tx.bookingHistory.create({
@@ -719,20 +724,22 @@ export class ConsignmentsService {
       },
     });
 
+    // Exclude voided bookings from all summary totals (cash, revenue, weight, etc.)
+    const activeBookings = bookings.filter((b) => b.status !== BookingStatus.VOIDED);
     const summary = {
-      totalBookings: bookings.length,
-      totalRevenue: bookings.reduce((sum, b) => sum + Number(b.totalAmount), 0),
-      totalWeight: bookings.reduce((sum, b) => sum + Number(b.weight), 0),
-      totalPackages: bookings.reduce((sum, b) => sum + b.pieces, 0),
+      totalBookings: activeBookings.length,
+      totalRevenue: activeBookings.reduce((sum, b) => sum + Number(b.totalAmount), 0),
+      totalWeight: activeBookings.reduce((sum, b) => sum + Number(b.weight), 0),
+      totalPackages: activeBookings.reduce((sum, b) => sum + b.pieces, 0),
       payModeBreakdown: {
-        CASH: bookings.filter(b => b.paymentMode === PaymentMode.CASH).length,
-        COD: bookings.filter(b => b.paymentMode === PaymentMode.COD).length,
-        ONLINE: bookings.filter(b => b.paymentMode === PaymentMode.ONLINE).length,
+        CASH: activeBookings.filter(b => b.paymentMode === PaymentMode.CASH).length,
+        COD: activeBookings.filter(b => b.paymentMode === PaymentMode.COD).length,
+        ONLINE: activeBookings.filter(b => b.paymentMode === PaymentMode.ONLINE).length,
       },
       revenueBreakdown: {
-        CASH: bookings.filter(b => b.paymentMode === PaymentMode.CASH).reduce((sum, b) => sum + Number(b.totalAmount), 0),
-        COD: bookings.filter(b => b.paymentMode === PaymentMode.COD).reduce((sum, b) => sum + Number(b.totalAmount), 0),
-        ONLINE: bookings.filter(b => b.paymentMode === PaymentMode.ONLINE).reduce((sum, b) => sum + Number(b.totalAmount), 0),
+        CASH: activeBookings.filter(b => b.paymentMode === PaymentMode.CASH).reduce((sum, b) => sum + Number(b.totalAmount), 0),
+        COD: activeBookings.filter(b => b.paymentMode === PaymentMode.COD).reduce((sum, b) => sum + Number(b.totalAmount), 0),
+        ONLINE: activeBookings.filter(b => b.paymentMode === PaymentMode.ONLINE).reduce((sum, b) => sum + Number(b.totalAmount), 0),
       }
     };
 
@@ -886,10 +893,10 @@ export class ConsignmentsService {
             Math.max(parseFloat(String(updateData.weight || 0)), parseFloat(String(updateData.volumetricWeight || 0))) : undefined,
           packetContent: updateData.packetContent !== undefined ? updateData.packetContent : undefined,
           handlingInstructions: updateData.handlingInstructions !== undefined ? updateData.handlingInstructions : undefined,
-          paymentMode: updateData.payMode ? (
-            updateData.payMode === 'PREPAID' ? 'CASH' :
-              updateData.payMode === 'TOPAY' ? 'ONLINE' :
-                updateData.payMode
+          paymentMode: (updateData.payMode ?? updateData.paymentMode) ? (
+            (updateData.payMode ?? updateData.paymentMode) === 'PREPAID' ? 'CASH' :
+              (updateData.payMode ?? updateData.paymentMode) === 'TOPAY' ? 'ONLINE' :
+                (updateData.payMode ?? updateData.paymentMode)
           ) : undefined,
           declaredValue: updateData.declaredValue !== undefined ? (updateData.declaredValue === null ? null : parseFloat(String(updateData.declaredValue))) : undefined,
 
@@ -899,25 +906,30 @@ export class ConsignmentsService {
           totalAmount: updateData.totalAmount !== undefined ? parseFloat(String(updateData.totalAmount)) : undefined,
           codAmount: updateData.codAmount !== undefined ? (updateData.codAmount === null ? null : parseFloat(String(updateData.codAmount))) : undefined,
 
-          // Shipper fields (stored on booking)
-          shipperName: updateData.fullName !== undefined ? updateData.fullName : undefined,
-          shipperPhone: updateData.mobileNumber !== undefined ? updateData.mobileNumber : undefined,
-          shipperCompanyName: updateData.companyName !== undefined ? updateData.companyName : undefined,
-          shipperAddress: updateData.address !== undefined ? updateData.address : undefined,
-          shipperAddress2: updateData.address2 !== undefined ? updateData.address2 : undefined,
-          shipperLandline: updateData.landlineNumber !== undefined ? updateData.landlineNumber : undefined,
-          shipperEmail: updateData.emailAddress !== undefined ? updateData.emailAddress : undefined,
-          shipperCnic: updateData.cnicNumber !== undefined ? updateData.cnicNumber : undefined,
+          // Shipper fields (accept both form names and API names so Edit Booking and other clients work)
+          shipperName: (updateData.shipperName ?? updateData.fullName) !== undefined ? (updateData.shipperName ?? updateData.fullName) : undefined,
+          shipperPhone: (updateData.shipperPhone ?? updateData.mobileNumber) !== undefined ? (updateData.shipperPhone ?? updateData.mobileNumber) : undefined,
+          shipperCompanyName: (updateData.shipperCompanyName ?? updateData.companyName) !== undefined ? (updateData.shipperCompanyName ?? updateData.companyName) : undefined,
+          shipperAddress: (updateData.shipperAddress ?? updateData.address) !== undefined ? (updateData.shipperAddress ?? updateData.address) : undefined,
+          shipperAddress2: (updateData.shipperAddress2 ?? updateData.address2) !== undefined ? (updateData.shipperAddress2 ?? updateData.address2) : undefined,
+          shipperLandline: (updateData.shipperLandline ?? updateData.landlineNumber) !== undefined ? (updateData.shipperLandline ?? updateData.landlineNumber) : undefined,
+          shipperEmail: (updateData.shipperEmail ?? updateData.emailAddress) !== undefined ? (updateData.shipperEmail ?? updateData.emailAddress) : undefined,
+          shipperCnic: (updateData.shipperCnic ?? updateData.cnicNumber) !== undefined ? (updateData.shipperCnic ?? updateData.cnicNumber) : undefined,
 
-          // Consignee fields
-          consigneeName: updateData.consigneeFullName !== undefined ? updateData.consigneeFullName : undefined,
-          consigneePhone: updateData.consigneeMobileNumber !== undefined ? updateData.consigneeMobileNumber : undefined,
+          // Consignee fields (accept both form names and API names)
+          consigneeName: (updateData.consigneeName ?? updateData.consigneeFullName) !== undefined ? (updateData.consigneeName ?? updateData.consigneeFullName) : undefined,
+          consigneePhone: (updateData.consigneePhone ?? updateData.consigneeMobileNumber) !== undefined ? (updateData.consigneePhone ?? updateData.consigneeMobileNumber) : undefined,
           consigneeCompanyName: updateData.consigneeCompanyName !== undefined ? updateData.consigneeCompanyName : undefined,
           consigneeAddress: updateData.consigneeAddress !== undefined ? updateData.consigneeAddress : undefined,
           consigneeAddress2: updateData.consigneeAddress2 !== undefined ? updateData.consigneeAddress2 : undefined,
-          consigneeLandline: updateData.consigneeLandlineNumber !== undefined ? updateData.consigneeLandlineNumber : undefined,
-          consigneeEmail: updateData.consigneeEmailAddress !== undefined ? updateData.consigneeEmailAddress : undefined,
+          consigneeLandline: (updateData.consigneeLandline ?? updateData.consigneeLandlineNumber) !== undefined ? (updateData.consigneeLandline ?? updateData.consigneeLandlineNumber) : undefined,
+          consigneeEmail: (updateData.consigneeEmail ?? updateData.consigneeEmailAddress) !== undefined ? (updateData.consigneeEmail ?? updateData.consigneeEmailAddress) : undefined,
           consigneeZipCode: updateData.consigneeZipCode !== undefined ? updateData.consigneeZipCode : undefined,
+
+          preferredDeliveryDate: updateData.preferredDeliveryDate !== undefined
+            ? (updateData.preferredDeliveryDate ? new Date(updateData.preferredDeliveryDate) : null)
+            : undefined,
+          preferredDeliveryTime: updateData.preferredDeliveryTime !== undefined ? updateData.preferredDeliveryTime : undefined,
         };
 
         const updated = await tx.booking.update({
@@ -986,6 +998,59 @@ export class ConsignmentsService {
       });
 
       return updated;
+    });
+  }
+
+  /**
+   * Get next CN for COD in the same format as booking API: CN-YYYYMMDD-XXXXXX.
+   * Reserves the CN so it is not issued to another booking until this one is created or reservation expires.
+   */
+  async getNextCnForCod(userId: string): Promise<{ cnNumber: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const day = now.getDate();
+      const monthStr = String(month + 1).padStart(2, '0');
+      const dayStr = String(day).padStart(2, '0');
+      const dateStr = `${year}${monthStr}${dayStr}`;
+      const prefix = `CN-${dateStr}-`;
+      const prefixLike = `${prefix}%`;
+
+      const todayStart = new Date(year, month, day, 0, 0, 0, 0);
+      const todayEnd = new Date(year, month, day, 23, 59, 59, 999);
+
+      const bookingsToday = await tx.booking.count({
+        where: {
+          createdAt: { gte: todayStart, lte: todayEnd },
+        },
+      });
+
+      type CountResult = [{ count: bigint }];
+      const reservationsResult = (await tx.$queryRaw(
+        Prisma.sql`SELECT COUNT(*)::int as count FROM cn_reservations WHERE cn_number LIKE ${prefixLike}`,
+      )) as CountResult;
+      const reservationsToday = Number(reservationsResult[0]?.count ?? 0);
+
+      const sequence = bookingsToday + reservationsToday + 1;
+      const cnNumber = `${prefix}${String(sequence).padStart(6, '0')}`;
+
+      const existsBooking = await tx.booking.findUnique({ where: { cnNumber } });
+      type ExistsRow = [{ exists: boolean }];
+      const existsReservationResult = (await tx.$queryRaw(
+        Prisma.sql`SELECT EXISTS(SELECT 1 FROM cn_reservations WHERE cn_number = ${cnNumber}) as exists`,
+      )) as ExistsRow;
+      const existsReservation = existsReservationResult[0]?.exists ?? false;
+      if (existsBooking || existsReservation) {
+        throw new BadRequestException('Failed to generate unique COD CN. Please try again.');
+      }
+
+      const id = crypto.randomUUID();
+      await tx.$executeRaw(
+        Prisma.sql`INSERT INTO cn_reservations (id, cn_number, user_id, created_at)
+        VALUES (${id}, ${cnNumber}, ${userId}, ${now})`,
+      );
+      return { cnNumber };
     });
   }
 }

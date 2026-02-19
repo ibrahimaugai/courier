@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Edit, Sparkles, X, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
+import { printBookingSlip, printCodSlip } from '../../../lib/bookingSlipPrint'
 import Toast from '../../Toast'
 import ShipmentDetails from './ShipmentDetails'
 import Shipper from './Shipper'
 import Consignee from './Consignee'
 import OtherAmountSection from './OtherAmountSection'
 import SubservicesModal from './SubservicesModal'
+import OnTimeDeliveryModal from './OnTimeDeliveryModal'
 
 export default function BookingConsignment() {
   const [showMofaModal, setShowMofaModal] = useState(false)
@@ -34,6 +36,17 @@ export default function BookingConsignment() {
   const dispatch = useDispatch()
   const { user } = useSelector((state) => state.auth)
   const { cities, rules: reduxRules, services: reduxServices } = useSelector((state) => state.pricing)
+  const ATTESTATION_SERVICE_VALUES = [
+    'ATS - Doc MOFA Attestation',
+    'ATR - Doc MOFA Home Delivery',
+    'APN - Apostille Normal',
+    'APU - Apostille Urgent',
+    'AE - UAE Embassy',
+    'BV - Board Verification',
+    'HEC - HEC',
+    'IBCC - IBCC',
+    'National Bureau',
+  ]
 
   const [formData, setFormData] = useState({
     product: '',
@@ -71,8 +84,11 @@ export default function BookingConsignment() {
     totalAmount: 0,
     batchId: '',
     batchCode: '',
+    preferredDeliveryDate: '',
+    preferredDeliveryTime: '',
   })
   const [activeBatch, setActiveBatch] = useState(null)
+  const [showOnTimeDeliveryModal, setShowOnTimeDeliveryModal] = useState(false)
 
   // Fetch active batch on mount
   useEffect(() => {
@@ -92,20 +108,33 @@ export default function BookingConsignment() {
     fetchActiveBatch()
   }, [])
 
-  // Handle CN Allocation from LocalStorage
+  // CN Number: only allocate when product is COD (via API). Other products leave CN empty (backend will auto-generate).
   useEffect(() => {
-    if (formData.product) {
-      const allocations = JSON.parse(localStorage.getItem('cnAllocations') || '{}')
-      const alloc = allocations[formData.product]
-
-      if (alloc && alloc.next) {
-        // Just use the 'next' value directly as per simplified logic
-        setFormData(prev => ({ ...prev, cnNumber: alloc.next.toString() }))
-        setCnAllocationError('')
-      } else {
-        setFormData(prev => ({ ...prev, cnNumber: '' }))
-        setCnAllocationError('No CN Allocation found for this product. Please allocate CNs first.')
-      }
+    if (!formData.product) {
+      setFormData(prev => ({ ...prev, cnNumber: '' }))
+      setCnAllocationError('')
+      return
+    }
+    if (formData.product === 'COD') {
+      api.getNextCnCod()
+        .then((res) => {
+          const data = res?.data ?? res
+          const cn = data?.cnNumber ?? data?.cn ?? ''
+          setFormData(prev => ({ ...prev, cnNumber: cn }))
+          setCnAllocationError('')
+        })
+        .catch((err) => {
+          setFormData(prev => ({ ...prev, cnNumber: '' }))
+          setCnAllocationError(err?.message || 'Failed to get next COD CN. Allocate COD CNs first.')
+        })
+      return
+    }
+    // Non-COD: optional localStorage-based allocation (legacy); otherwise leave empty
+    const allocations = JSON.parse(localStorage.getItem('cnAllocations') || '{}')
+    const alloc = allocations[formData.product]
+    if (alloc && alloc.next) {
+      setFormData(prev => ({ ...prev, cnNumber: alloc.next.toString() }))
+      setCnAllocationError('')
     } else {
       setFormData(prev => ({ ...prev, cnNumber: '' }))
       setCnAllocationError('')
@@ -175,7 +204,8 @@ export default function BookingConsignment() {
         return entry ? entry[1] : 'N/A'
       }
 
-      if (formData.product === 'Attestation') {
+      const isAttestationServiceSelected = ATTESTATION_SERVICE_VALUES.includes(formData.services)
+      if (isAttestationServiceSelected) {
         applicableRules = reduxRules.filter(rule =>
           rule.service?.serviceName === formData.services &&
           rule.service?.serviceType === 'Attestation'
@@ -233,9 +263,9 @@ export default function BookingConsignment() {
     const { documents } = getSelectedDocuments()
     const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
     
-    // Calculate subservices total for Attestation services
+    // Calculate subservices total for Attestation services (by service name; product can be General)
     let subservicesTotal = 0
-    if (formData.product === 'Attestation' && selectedSubservices.length > 0 && formData.services) {
+    if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && selectedSubservices.length > 0 && formData.services) {
       const currentSubservices = subservicesData[formData.services] || []
       subservicesTotal = selectedSubservices.reduce((total, id) => {
         const subservice = currentSubservices.find((s) => s.id === id)
@@ -262,9 +292,8 @@ export default function BookingConsignment() {
     if (hasRequiredFields && rate > 0) {
       finalRate = rate
       totalAmount = (rate * pcs) + docTotal + other + subservices
-    } else if (formData.product === 'Attestation') {
-      // For Attestation, calculate total even without rate/weight/origin/destination
-      // Allow calculation if service is selected (even if no subservices selected yet)
+    } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services)) {
+      // For Attestation services (shown under General), calculate total even without rate/weight/origin/destination
       if (formData.services) {
         totalAmount = docTotal + other + subservices
       }
@@ -298,6 +327,9 @@ export default function BookingConsignment() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    if (name === 'services' && value === 'On Time Service' && formData.product === 'General') {
+      setShowOnTimeDeliveryModal(true)
+    }
     setFormData(prev => {
       const updated = {
         ...prev,
@@ -329,16 +361,8 @@ export default function BookingConsignment() {
     const service = formData.services || ''
     const product = formData.product || ''
 
-    // Handle Attestation product services - show subservices modal
-    if (product === 'Attestation' && service) {
-      const attestationServices = [
-        'NPS All Services',
-        'Embassies Attestation',
-        'Educational Documents Attestation',
-        'Special Documents',
-        'Translation of any embassy',
-      ]
-      if (attestationServices.includes(service)) {
+    // Handle Attestation services (shown under General) - show subservices modal
+    if (service && ATTESTATION_SERVICE_VALUES.includes(service)) {
         // Fetch subservices if not already cached
         if (!subservicesData[service]) {
           api.getSubservices(service)
@@ -355,7 +379,6 @@ export default function BookingConsignment() {
         }
         setShowSubservicesModal(true)
         return
-      }
     }
 
     // Only open modal if a document-requiring service is selected
@@ -675,10 +698,28 @@ export default function BookingConsignment() {
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
   const [documentFiles, setDocumentFiles] = useState([])
 
-  // No longer needed as we have a dropdown with database values
+  // Pre-fill origin from Configuration default (localStorage)
+  const defaultOriginKey = 'bookingDefaultOriginCityId'
   useEffect(() => {
-    // Optional: Set a default city if needed once cities are loaded
+    if (!cities?.length) return
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(defaultOriginKey) : null
+    if (saved && saved.trim()) {
+      const exists = cities.some((c) => c.id === saved)
+      if (exists) {
+        setFormData((prev) => (prev.originCity ? prev : { ...prev, originCity: saved }))
+      }
+    }
   }, [cities])
+
+  // After form reset, re-apply default origin from localStorage
+  useEffect(() => {
+    if (!formData.originCity && cities?.length) {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(defaultOriginKey) : null
+      if (saved && saved.trim() && cities.some((c) => c.id === saved)) {
+        setFormData((prev) => ({ ...prev, originCity: saved }))
+      }
+    }
+  }, [formData.originCity, cities])
 
   // Get selected documents with their details
   const getSelectedDocuments = () => {
@@ -774,11 +815,13 @@ export default function BookingConsignment() {
 
       // For "Blue Box Xkg" services, send service "Blue Box" so backend resolves correctly
       const effectiveServiceId = formData.services && formData.services.match(/^Blue Box (\d+)kg$/) ? 'Blue Box' : formData.services
+      // When user selects an attestation service (under General), send productId "Attestation" so backend/pricing unchanged
+      const effectiveProductId = ATTESTATION_SERVICE_VALUES.includes(formData.services) ? 'Attestation' : formData.product
 
       // Map form data to API format
       const bookingData = {
         // Product & Service - use names/codes (backend will resolve to IDs)
-        productId: formData.product, // e.g., "General"
+        productId: effectiveProductId,
         serviceId: effectiveServiceId,
         destinationCityId: formData.destination, // e.g., "LHE - Lahore"
         originCityId: formData.originCity,
@@ -791,6 +834,8 @@ export default function BookingConsignment() {
         handlingInstructions: formData.handlingInstructions || undefined,
         packetContent: formData.packetContent,
         payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
+        preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
+        preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
         volumetricWeight: parseFloat(formData.volumetricWeight || '0') || undefined,
         weight: parseFloat(formData.weight),
         chargeableWeight: chargeableWeight,
@@ -839,25 +884,33 @@ export default function BookingConsignment() {
         type: 'success'
       })
 
-      // Update LocalStorage CN Allocation
+      // Update LocalStorage CN Allocation for non-COD products only (COD is managed by API)
       const currentProduct = formData.product
-      if (currentProduct) {
+      if (currentProduct && currentProduct !== 'COD') {
         try {
           const allocations = JSON.parse(localStorage.getItem('cnAllocations') || '{}')
-          // Remove the used allocation completely as it's a single concatenated value
-          delete allocations[currentProduct]
-          localStorage.setItem('cnAllocations', JSON.stringify(allocations))
+          const alloc = allocations[currentProduct]
+          if (alloc && alloc.next != null) {
+            const nextNum = Number(alloc.next)
+            if (!Number.isNaN(nextNum)) {
+              alloc.next = String(nextNum + 1)
+              allocations[currentProduct] = alloc
+              localStorage.setItem('cnAllocations', JSON.stringify(allocations))
+            }
+          }
         } catch (e) {
           console.error("Failed to update local CN allocation", e)
         }
       }
 
-      // Reset form after successful submission
+      // Reset form after successful submission (re-apply default origin from localStorage)
+      const savedOrigin = typeof window !== 'undefined' ? localStorage.getItem(defaultOriginKey) : null
+      const defaultOrigin = savedOrigin && cities?.some((c) => c.id === savedOrigin) ? savedOrigin : ''
       setTimeout(() => {
         setFormData({
           product: '', // Resetting product will clear CN error and input
           destination: '',
-          originCity: '',
+          originCity: defaultOrigin,
           cnNumber: '',
           pieces: '1',
           handlingInstructions: '',
@@ -885,6 +938,8 @@ export default function BookingConsignment() {
           otherAmount: '',
           rate: '',
           totalAmount: 0,
+          preferredDeliveryDate: '',
+          preferredDeliveryTime: '',
         })
         setSelectedDocuments([])
         setSelectedApostilleDocuments([])
@@ -945,6 +1000,7 @@ export default function BookingConsignment() {
         selectedSubservices={selectedSubservices}
         onOpenSubservicesModal={() => setShowSubservicesModal(true)}
         subservicesData={subservicesData}
+        onOpenOnTimeDeliveryModal={() => setShowOnTimeDeliveryModal(true)}
       />
 
       {/* Shipper Section */}
@@ -960,6 +1016,48 @@ export default function BookingConsignment() {
         handleSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         attestationInfo={attestationInfo}
+        onPrintCN={async () => {
+          const citiesMap = (cities || []).reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+          const draft = {
+            cnNumber: formData.cnNumber || 'TBD',
+            fullName: formData.fullName,
+            mobileNumber: formData.mobileNumber,
+            address: formData.address,
+            consigneeFullName: formData.consigneeFullName,
+            consigneeMobileNumber: formData.consigneeMobileNumber,
+            consigneeAddress: formData.consigneeAddress,
+            originCityId: formData.originCity,
+            destinationCityId: formData.destination,
+            productId: formData.product,
+            serviceId: formData.services,
+            originCity: formData.originCity ? { cityName: citiesMap[formData.originCity] || formData.originCity } : null,
+            destinationCity: formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination } : null,
+            product: formData.product ? { productName: formData.product } : null,
+            service: formData.services ? { serviceName: formData.services } : null,
+            pieces: formData.pieces,
+            weight: formData.weight,
+            packetContent: formData.packetContent,
+            rate: formData.rate,
+            otherAmount: formData.otherAmount,
+            totalAmount: formData.totalAmount,
+            payMode: formData.payMode,
+            preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
+            preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
+            codAmount: formData.payMode === 'COD' ? formData.totalAmount : undefined,
+          }
+          let config = {}
+          try {
+            const res = await api.getConfiguration()
+            config = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null) ?? {}
+          } catch (_) {}
+          config.staffCode = config.staffCode ?? user?.staffCode
+          config.username = config.username ?? config.updatedByUser?.username ?? user?.username
+          if (formData.product === 'COD') {
+            printCodSlip(draft, { config })
+          } else {
+            printBookingSlip(draft, { config })
+          }
+        }}
       />
 
       {/* Toast Notification */}
@@ -1708,6 +1806,21 @@ export default function BookingConsignment() {
           setSubservicesData((prev) => ({
             ...prev,
             [serviceName]: subservices,
+          }))
+        }}
+      />
+
+      {/* On Time Service – delivery date & time */}
+      <OnTimeDeliveryModal
+        isOpen={showOnTimeDeliveryModal}
+        onClose={() => setShowOnTimeDeliveryModal(false)}
+        initialDate={formData.preferredDeliveryDate}
+        initialTime={formData.preferredDeliveryTime}
+        onConfirm={(date, time) => {
+          setFormData(prev => ({
+            ...prev,
+            preferredDeliveryDate: date,
+            preferredDeliveryTime: time,
           }))
         }}
       />

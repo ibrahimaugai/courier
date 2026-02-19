@@ -71,6 +71,16 @@ export class CreateConsignmentDto {
   @IsString()
   handlingInstructions?: string;
 
+  @ApiProperty({ example: '2026-02-20', description: 'Preferred delivery date (YYYY-MM-DD) for On Time Service', required: false })
+  @IsOptional()
+  @IsString()
+  preferredDeliveryDate?: string;
+
+  @ApiProperty({ example: '14:00', description: 'Preferred delivery time for On Time Service', required: false })
+  @IsOptional()
+  @IsString()
+  preferredDeliveryTime?: string;
+
   @ApiProperty({ example: 'Electronics' })
   @IsString()
   @IsNotEmpty()

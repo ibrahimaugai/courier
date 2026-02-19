@@ -152,6 +152,12 @@ export class ConsignmentsController {
     return this.consignmentsService.getMyCns(req.user.id);
   }
 
+  @Get('next-cn-cod')
+  @ApiOperation({ summary: 'Get next CN number for COD product (for booking form)' })
+  async getNextCnCod(@Request() req) {
+    return this.consignmentsService.getNextCnForCod(req.user.id);
+  }
+
   @Get('track/:cnNumber')
   @ApiOperation({ summary: 'Track consignment by CN number' })
   async findByCnNumber(@Param('cnNumber') cnNumber: string) {

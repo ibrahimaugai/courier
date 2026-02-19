@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -127,13 +127,16 @@ export class PricingService {
   }
 
   async getSubservices(serviceName: string) {
-    // Map service category names to actual service categories in database
     const categoryMapping: { [key: string]: string[] } = {
-      'NPS All Services': ['NPS'],
-      'Embassies Attestation': ['Embassy'],
-      'Educational Documents Attestation': ['Educational'],
-      'Special Documents': ['Special'],
-      'Translation of any embassy': ['Translation'],
+      'ATS - Doc MOFA Attestation': ['ATS'],
+      'ATR - Doc MOFA Home Delivery': ['ATR'],
+      'APN - Apostille Normal': ['APN'],
+      'APU - Apostille Urgent': ['APU'],
+      'AE - UAE Embassy': ['AE'],
+      'BV - Board Verification': ['BV'],
+      'HEC - HEC': ['HEC'],
+      'IBCC - IBCC': ['IBCC'],
+      'National Bureau': ['NationalBureau'],
     };
 
     const categories = categoryMapping[serviceName] || [];
@@ -177,37 +180,15 @@ export class PricingService {
         const serviceNameLower = service.serviceName.toLowerCase();
         return categories.some((category) => {
           const categoryLower = category.toLowerCase();
-          if (categoryLower === 'nps') {
-            return (
-              serviceNameLower.includes('mofa general') ||
-              serviceNameLower.includes('apostille') ||
-              serviceNameLower.includes('national beuro') ||
-              serviceNameLower.includes('national bureau')
-            );
-          } else if (categoryLower === 'embassy') {
-            return (
-              serviceNameLower.includes('embassy') ||
-              serviceNameLower.includes('culture')
-            );
-          } else if (categoryLower === 'educational') {
-            return (
-              serviceNameLower.includes('hec') ||
-              serviceNameLower.includes('university') ||
-              serviceNameLower.includes('ibcc') ||
-              serviceNameLower.includes('board') ||
-              serviceNameLower.includes('borad') ||
-              serviceNameLower.includes('enquivalence')
-            );
-          } else if (categoryLower === 'special') {
-            return (
-              serviceNameLower.includes('marriage') ||
-              serviceNameLower.includes('divorce') ||
-              serviceNameLower.includes('stamp paper') ||
-              serviceNameLower.includes('commercial documents')
-            );
-          } else if (categoryLower === 'translation') {
-            return serviceNameLower.includes('translation');
-          }
+          if (categoryLower === 'ats') return serviceNameLower.includes('mofa') && (serviceNameLower.includes('doc') || serviceNameLower.includes('attestation'));
+          if (categoryLower === 'atr') return serviceNameLower.includes('mofa') && serviceNameLower.includes('home delivery');
+          if (categoryLower === 'apn') return serviceNameLower.includes('apostille') && serviceNameLower.includes('normal');
+          if (categoryLower === 'apu') return serviceNameLower.includes('apostille') && (serviceNameLower.includes('urgent') || serviceNameLower.includes('urgnt'));
+          if (categoryLower === 'ae') return serviceNameLower.includes('uae') && serviceNameLower.includes('embassy');
+          if (categoryLower === 'bv') return serviceNameLower.includes('board') && serviceNameLower.includes('verification');
+          if (categoryLower === 'hec') return serviceNameLower.includes('hec');
+          if (categoryLower === 'ibcc') return serviceNameLower.includes('ibcc');
+          if (categoryLower === 'nationalbureau') return serviceNameLower.includes('national bureau') || serviceNameLower.includes('national beuro');
           return false;
         });
       })
@@ -376,17 +357,19 @@ export class PricingService {
     const service = await this.prisma.service.findUnique({
       where: { id },
     });
+    if (!service) throw new BadRequestException('Service not found.');
 
-    if (service.status === 'active') {
-      return await this.prisma.service.update({
-        where: { id },
-        data: { status: 'inactive' },
-      });
-    } else {
-      return await this.prisma.service.delete({
-        where: { id },
-      });
+    const bookingCount = await this.prisma.booking.count({ where: { serviceId: id } });
+    if (bookingCount > 0) {
+      throw new BadRequestException(`Cannot delete: ${bookingCount} booking(s) use this service.`);
     }
+    const productCount = await this.prisma.product.count({ where: { serviceId: id } });
+    if (productCount > 0) {
+      throw new BadRequestException(`Cannot delete: ${productCount} product(s) use this service.`);
+    }
+
+    await this.prisma.pricingRule.deleteMany({ where: { serviceId: id } });
+    return await this.prisma.service.delete({ where: { id } });
   }
 
   // ============================================
@@ -407,19 +390,95 @@ export class PricingService {
   }
 
   async deleteCity(id: string) {
-    const city = await this.prisma.city.findUnique({
-      where: { id },
-    });
+    const city = await this.prisma.city.findUnique({ where: { id } });
+    if (!city) throw new BadRequestException('City not found.');
 
-    if (city.status === 'active') {
-      return await this.prisma.city.update({
-        where: { id },
-        data: { status: 'inactive' },
-      });
-    } else {
-      return await this.prisma.city.delete({
-        where: { id },
-      });
+    const [rulesCount, bookingsCount, stationsCount, customersCount] = await Promise.all([
+      this.prisma.pricingRule.count({ where: { OR: [{ originCityId: id }, { destinationCityId: id }] } }),
+      this.prisma.booking.count({ where: { OR: [{ originCityId: id }, { destinationCityId: id }] } }),
+      this.prisma.station.count({ where: { cityId: id } }),
+      this.prisma.customer.count({ where: { cityId: id } }),
+    ]);
+    if (rulesCount > 0 || bookingsCount > 0 || stationsCount > 0 || customersCount > 0) {
+      const parts = [];
+      if (rulesCount) parts.push(`${rulesCount} pricing rule(s)`);
+      if (bookingsCount) parts.push(`${bookingsCount} booking(s)`);
+      if (stationsCount) parts.push(`${stationsCount} station(s)`);
+      if (customersCount) parts.push(`${customersCount} customer(s)`);
+      throw new BadRequestException(`Cannot delete: city is used by ${parts.join(', ')}.`);
     }
+
+    return await this.prisma.city.delete({ where: { id } });
+  }
+
+  async getAttestationCategories(): Promise<{ key: string; display: string }[]> {
+    const defaultCats = [
+      { key: 'ATS', display: 'ATS - Doc MOFA Attestation' },
+      { key: 'ATR', display: 'ATR - Doc MOFA Home Delivery' },
+      { key: 'APN', display: 'APN - Apostille Normal' },
+      { key: 'APU', display: 'APU - Apostille Urgent' },
+      { key: 'AE', display: 'AE - UAE Embassy' },
+      { key: 'BV', display: 'BV - Board Verification' },
+      { key: 'HEC', display: 'HEC - HEC' },
+      { key: 'IBCC', display: 'IBCC - IBCC' },
+      { key: 'NationalBureau', display: 'National Bureau' },
+    ];
+    const defaultKeys = new Set(defaultCats.map((c) => c.key.toLowerCase()));
+    const fromDb = await this.prisma.service.findMany({
+      where: { serviceType: 'Attestation', attestationCategory: { not: null } },
+      select: { attestationCategory: true },
+      distinct: ['attestationCategory'],
+    });
+    const dynamic: { key: string; display: string }[] = [];
+    fromDb.forEach((s) => {
+      const k = (s.attestationCategory || '').trim();
+      if (k && !defaultKeys.has(k.toLowerCase())) {
+        defaultKeys.add(k.toLowerCase());
+        dynamic.push({ key: k, display: k });
+      }
+    });
+    return [...defaultCats, ...dynamic];
+  }
+
+  private serviceBelongsToCategory(service: { attestationCategory?: string | null; serviceName: string }, categoryKey: string): boolean {
+    const cat = (service.attestationCategory || '').trim();
+    if (cat && cat.toLowerCase() === categoryKey.toLowerCase()) return true;
+    const name = (service.serviceName || '').toLowerCase();
+    const key = categoryKey.toLowerCase();
+    if (key === 'ats') return name.includes('mofa') && (name.includes('doc') || name.includes('attestation'));
+    if (key === 'atr') return name.includes('mofa') && name.includes('home delivery');
+    if (key === 'apn') return name.includes('apostille') && name.includes('normal');
+    if (key === 'apu') return name.includes('apostille') && (name.includes('urgent') || name.includes('urgnt'));
+    if (key === 'ae') return name.includes('uae') && name.includes('embassy');
+    if (key === 'bv') return name.includes('board') && name.includes('verification');
+    if (key === 'hec') return name.includes('hec');
+    if (key === 'ibcc') return name.includes('ibcc');
+    if (key === 'nationalbureau') return name.includes('national bureau') || name.includes('national beuro');
+    return false;
+  }
+
+  async deleteAttestationCategory(categoryKey: string): Promise<{ deleted: number }> {
+    const allAttestation = await this.prisma.service.findMany({
+      where: { serviceType: 'Attestation' },
+      select: { id: true, attestationCategory: true, serviceName: true },
+    });
+    const services = allAttestation.filter((s) => this.serviceBelongsToCategory(s, categoryKey));
+    if (services.length === 0) {
+      return { deleted: 0 };
+    }
+    const ids = services.map((s) => s.id);
+    const bookingCount = await this.prisma.booking.count({ where: { serviceId: { in: ids } } });
+    if (bookingCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete category: ${bookingCount} booking(s) use services in this category.`,
+      );
+    }
+    const productRefs = await this.prisma.product.count({ where: { serviceId: { in: ids } } });
+    if (productRefs > 0) {
+      throw new BadRequestException(`Cannot delete category: ${productRefs} product(s) reference services in this category.`);
+    }
+    await this.prisma.pricingRule.deleteMany({ where: { serviceId: { in: ids } } });
+    await this.prisma.service.deleteMany({ where: { id: { in: ids } } });
+    return { deleted: ids.length };
   }
 }

@@ -7,6 +7,7 @@ import UserBookingConsignment from './components/User/Booking/UserBookingConsign
 import EditBooking from './components/User/EditBooking'
 import PickupRequest from './components/User/PickupRequest'
 import TrackShipment from './components/User/TrackShipment'
+import UserShiftClose from './components/User/UserShiftClose'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function Home() {
@@ -27,6 +28,8 @@ export default function Home() {
         return <PickupRequest />
       case 'Track Shipment':
         return <TrackShipment />
+      case 'Shift Close':
+        return <UserShiftClose />
       case 'My Shipments':
       case 'Home': // Support legacy 'Home' for backward compatibility
       default:

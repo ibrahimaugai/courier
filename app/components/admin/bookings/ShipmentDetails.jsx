@@ -2,7 +2,19 @@
 
 import React, { useMemo } from 'react'
 
-const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'Attestation', 'COD']
+// Attestation removed from list; attestation services appear under General
+const PRODUCT_TYPES = ['General', 'International', 'OLE', 'Logistics', 'Sentiments', 'COD']
+const ATTESTATION_SERVICE_VALUES = [
+  'ATS - Doc MOFA Attestation',
+  'ATR - Doc MOFA Home Delivery',
+  'APN - Apostille Normal',
+  'APU - Apostille Urgent',
+  'AE - UAE Embassy',
+  'BV - Board Verification',
+  'HEC - HEC',
+  'IBCC - IBCC',
+  'National Bureau',
+]
 
 // Blue Box weight-tier services: 1kg–10kg, then 15, 20, 25kg. "Blue Box" (generic) is excluded.
 const BLUE_BOX_WEIGHT_SERVICES = [
@@ -31,7 +43,22 @@ export default function ShipmentDetails({
   selectedSubservices = [],
   onOpenSubservicesModal,
   subservicesData = {},
+  onOpenOnTimeDeliveryModal,
 }) {
+  const isOnTimeService = formData.product === 'General' && formData.services === 'On Time Service'
+  const hasPreferredDelivery = !!(formData.preferredDeliveryDate || formData.preferredDeliveryTime)
+  const formatDeliveryDate = (dateStr) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr + 'T12:00:00')
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+  const formatDeliveryTime = (timeStr) => {
+    if (!timeStr) return ''
+    const [h, m] = timeStr.split(':').map(Number)
+    if (h === 12) return `12:${String(m || 0).padStart(2, '0')} PM`
+    if (h === 0) return `12:${String(m || 0).padStart(2, '0')} AM`
+    return `${h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+  }
   // Get all active operational cities
   const activeCities = cities
     .filter(city => city && city.status === 'active')
@@ -44,19 +71,7 @@ export default function ShipmentDetails({
   const availableServices = useMemo(() => {
     if (!services || !Array.isArray(services) || !formData.product) return []
     
-    // Special handling for Attestation product
-    if (formData.product === 'Attestation') {
-      // Return predefined attestation service categories
-      return [
-        { value: 'NPS All Services', label: 'NPS All Services' },
-        { value: 'Embassies Attestation', label: 'Embassies Attestation' },
-        { value: 'Educational Documents Attestation', label: 'Educational Documents Attestation' },
-        { value: 'Special Documents', label: 'Special Documents' },
-        { value: 'Translation of any embassy', label: 'Translation of any embassy' },
-      ]
-    }
-    
-    // For General product: exclude "Blue Box" and add Blue Box 1kg–10kg, 15kg, 20kg, 25kg (ordered by weight)
+    // For General product: General services + Blue Box tiers + all attestation services
     if (formData.product === 'General') {
       const fromDb = services
         .filter(s => s.serviceType === 'General')
@@ -64,7 +79,8 @@ export default function ShipmentDetails({
         .filter(s => s.value !== 'Blue Box')
         .sort((a, b) => a.label.localeCompare(b.label))
       const blueBoxOptions = BLUE_BOX_WEIGHT_SERVICES.map(name => ({ value: name, label: name }))
-      return [...fromDb, ...blueBoxOptions] // Blue Box options already in weight order (1–10, 15, 20, 25)
+      const attestationOptions = ATTESTATION_SERVICE_VALUES.map(name => ({ value: name, label: name }))
+      return [...fromDb, ...blueBoxOptions, ...attestationOptions]
     }
     
     // Regular services for other products
@@ -79,18 +95,10 @@ export default function ShipmentDetails({
   const isWeightLockedForBlueBox = Boolean(blueBoxWeightMatch)
   const lockedWeightKg = blueBoxWeightMatch ? blueBoxWeightMatch[1] : ''
 
-  // Check if current service is an attestation service that needs subservices
+  // Check if current service is an attestation service that needs subservices (by service name; product can be General)
   const isAttestationService = useMemo(() => {
-    if (formData.product !== 'Attestation') return false
-    const attestationServices = [
-      'NPS All Services',
-      'Embassies Attestation',
-      'Educational Documents Attestation',
-      'Special Documents',
-      'Translation of any embassy',
-    ]
-    return attestationServices.includes(formData.services)
-  }, [formData.product, formData.services])
+    return formData.services ? ATTESTATION_SERVICE_VALUES.includes(formData.services) : false
+  }, [formData.services])
 
   // Determine which document section to show based on selected service
   const getDocumentSectionInfo = () => {
@@ -335,6 +343,32 @@ export default function ShipmentDetails({
                     </option>
                   ))}
                 </select>
+                {/* On Time Service – delivery date/time preview */}
+                {isOnTimeService && (
+                  <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                    <p className="text-xs font-semibold text-sky-700 uppercase tracking-wider mb-1">Preferred delivery (On Time Service)</p>
+                    {hasPreferredDelivery ? (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-900">
+                          {formData.preferredDeliveryDate && formatDeliveryDate(formData.preferredDeliveryDate)}
+                          {formData.preferredDeliveryDate && formData.preferredDeliveryTime && ' at '}
+                          {formData.preferredDeliveryTime && formatDeliveryTime(formData.preferredDeliveryTime)}
+                        </span>
+                        {onOpenOnTimeDeliveryModal && (
+                          <button
+                            type="button"
+                            onClick={onOpenOnTimeDeliveryModal}
+                            className="text-xs font-semibold text-sky-600 hover:text-sky-800 underline"
+                          >
+                            Change
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">Select date & time in the pop-up or click service again to open.</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Pay Mode */}

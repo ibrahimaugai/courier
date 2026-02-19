@@ -230,26 +230,35 @@ export default function RmsToday() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {bookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-sky-50/40 transition-colors group cursor-default">
+                {bookings.map((booking) => {
+                  const isVoided = booking.status === 'VOIDED'
+                  return (
+                  <tr key={booking.id} className={`transition-colors group cursor-default ${isVoided ? 'bg-red-50/50 hover:bg-red-50/70' : 'hover:bg-sky-50/40'}`}>
                     <td className="px-8 py-5 whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-black text-sky-700 tracking-tight group-hover:tracking-normal transition-all">{booking.cnNumber}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-black tracking-tight group-hover:tracking-normal transition-all ${isVoided ? 'text-gray-500 line-through' : 'text-sky-700'}`}>{booking.cnNumber}</span>
+                          {isVoided && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase bg-red-200 text-red-800 border border-red-300">
+                              Void
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-gray-400 font-medium">Ref ID: {booking.id.slice(0, 8)}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className={`px-8 py-5 ${isVoided ? 'opacity-70' : ''}`}>
                       <div className="flex flex-col">
-                        <span className="text-sm font-black text-gray-900 leading-tight mb-0.5">{booking.destinationCity?.name}</span>
-                        <span className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded border border-sky-100 inline-block w-fit font-black uppercase">{booking.destinationCity?.code}</span>
+                        <span className="text-sm font-black text-gray-900 leading-tight mb-0.5">{booking.destinationCity?.cityName ?? '—'}</span>
+                        <span className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded border border-sky-100 inline-block w-fit font-black uppercase">{booking.destinationCity?.cityCode ?? ''}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className={`px-8 py-5 ${isVoided ? 'opacity-70' : ''}`}>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-tighter">
-                        {booking.service?.name}
+                        {booking.service?.serviceName ?? '—'}
                       </span>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className={`px-8 py-5 ${isVoided ? 'opacity-70' : ''}`}>
                       <div className="flex items-center gap-3">
                         <div className="flex flex-col">
                           <span className="text-xs font-black text-gray-900">{booking.weight} KG</span>
@@ -257,22 +266,27 @@ export default function RmsToday() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className={`px-8 py-5 ${isVoided ? 'opacity-70' : ''}`}>
                       <div className="flex flex-col">
                         <span className="text-[11px] font-black text-gray-600 uppercase tracking-tight truncate max-w-[120px]">{booking.packetContent}</span>
                         <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded w-fit mt-1 ${booking.payMode === 'COD' ? 'bg-emerald-100 text-emerald-800' :
                           booking.paymentMode === 'CASH' ? 'bg-sky-100 text-sky-800' :
                             'bg-amber-100 text-amber-800'
                           }`}>
-                          {booking.payMode}
+                          {booking.payMode ?? booking.paymentMode ?? '—'}
                         </span>
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-right font-black text-gray-900 text-sm">
-                      {parseFloat(booking.totalAmount).toLocaleString()}
+                    <td className="px-8 py-5 text-right font-black text-sm">
+                      {isVoided ? (
+                        <span className="text-red-600 font-black uppercase">Void</span>
+                      ) : (
+                        <span className="text-gray-900">{parseFloat(booking.totalAmount).toLocaleString()}</span>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           ) : (

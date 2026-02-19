@@ -1,9 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
 import { api } from '../../lib/api'
-import { Loader2, Search } from 'lucide-react'
+import { printBookingSlip, printCodSlip } from '../../lib/bookingSlipPrint'
+import { Loader2, Search, Printer } from 'lucide-react'
 
 export default function CnReprint() {
+  const user = useSelector((state) => state.auth?.user)
   const [cnNumber, setCnNumber] = useState('')
   const [bookingData, setBookingData] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -84,6 +87,33 @@ export default function CnReprint() {
 
       {bookingData && (
         <div className="bg-white rounded-lg shadow-sm p-6 space-y-8 animate-fade-in">
+          {/* Reprint CN - Print booking slip */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={async () => {
+                let config = {}
+                try {
+                  const res = await api.getConfiguration()
+                  const data = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null)
+                  if (data) config = { ...data }
+                } catch (_) {}
+                config.staffCode = config.staffCode ?? user?.staffCode
+                config.username = config.username ?? config.updatedByUser?.username ?? user?.username
+                const isCod = bookingData.product && (bookingData.product.productName === 'COD' || bookingData.product.productCode === 'COD')
+                if (isCod) {
+                  printCodSlip(bookingData, { config })
+                } else {
+                  printBookingSlip(bookingData, { config })
+                }
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition-colors font-medium shadow-md"
+            >
+              <Printer className="w-5 h-5" />
+              Reprint CN
+            </button>
+          </div>
+
           {/* Top Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>

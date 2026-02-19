@@ -2,7 +2,7 @@
 
 import { Printer, Save, Loader2, Info } from 'lucide-react'
 
-export default function OtherAmountSection({ formData, handleInputChange, handleSubmit, isSubmitting = false, attestationInfo }) {
+export default function OtherAmountSection({ formData, handleInputChange, handleSubmit, isSubmitting = false, attestationInfo, onPrintCN }) {
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return 'PKR 0'
     return `PKR ${parseFloat(amount).toLocaleString('en-PK')}`
@@ -75,6 +75,7 @@ export default function OtherAmountSection({ formData, handleInputChange, handle
           <div className="flex gap-3">
             <button
               type="button"
+              onClick={() => onPrintCN?.()}
               className="px-6 py-2 border-2 border-sky-600 text-sky-600 bg-white rounded-md hover:bg-sky-50 transition-colors flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting}
             >

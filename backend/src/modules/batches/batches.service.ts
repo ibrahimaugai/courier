@@ -20,14 +20,15 @@ export class BatchesService {
             throw new BadRequestException('Invalid date format');
         }
 
-        // Generate Batch Code: staffCode-YYYYMMDD-X
+        // Generate Batch Code: staffCode-originCode-YYYYMMDD-N (originCode = stationCode)
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        const datePrefix = `${year}${month}${day}`;
-        const prefix = `${staffCode}-${datePrefix}`;
+        const datePart = `${year}${month}${day}`;
+        const originPart = stationCode || 'NA';
+        const prefix = `${staffCode}-${originPart}-${datePart}`;
 
-        // Find latest batch for this staff and date to increment the counter
+        // Find latest batch for this staff+origin+date to increment the counter
         const latestBatch = await this.prisma.batch.findFirst({
             where: {
                 batchCode: {
@@ -70,7 +71,7 @@ export class BatchesService {
 
     /**
      * Ensures an active batch exists for the user.
-     * If not found, it creates one using the user's configuration.
+     * If not found, creates one: for USER role uses username-YYYYMMDD-N; for admin uses configuration.
      */
     async ensureActiveBatch(userId: string, tx?: any) {
         const prisma = tx || this.prisma;
@@ -86,16 +87,31 @@ export class BatchesService {
 
         if (activeBatch) return activeBatch;
 
-        // 2. If not found, get user's configuration
-        const config = await prisma.configuration.findUnique({
-            where: { userId },
-        });
+        // 2. Get user (for role and username) and configuration
+        const [user, config] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, role: true, username: true },
+            }),
+            prisma.configuration.findUnique({
+                where: { userId },
+            }),
+        ]);
 
+        if (!user) {
+            throw new BadRequestException('User not found.');
+        }
+
+        // 3a. For USER role: create batch with username-YYYYMMDD-N (no configuration required)
+        if (user.role === 'USER') {
+            return this.createBatchForUserInternal(userId, user.username, prisma);
+        }
+
+        // 3b. For admin: require configuration
         if (!config || !config.stationCode || !config.staffCode) {
             throw new BadRequestException('Action denied: No active batch found and no system configuration set. Please update your Configuration first.');
         }
 
-        // 3. Create new batch
         return this.createBatchInternal({
             batchDate: new Date().toISOString().split('T')[0],
             stationCode: config.stationCode,
@@ -103,6 +119,58 @@ export class BatchesService {
             staffCode: config.staffCode,
             adminId: userId,
         }, prisma);
+    }
+
+    /**
+     * Create next batch for USER role (username-YYYYMMDD-N). Called after shift close.
+     */
+    async createBatchForUser(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, role: true, username: true },
+        });
+        if (!user || user.role !== 'USER') {
+            throw new BadRequestException('This endpoint is for USER role only.');
+        }
+        return this.createBatchForUserInternal(userId, user.username, this.prisma);
+    }
+
+    /**
+     * Creates a batch for USER role: batchCode = username-YYYYMMDD-N.
+     */
+    private async createBatchForUserInternal(userId: string, username: string, prisma: any) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const datePart = `${year}${month}${day}`;
+        const prefix = `${username}-${datePart}`;
+
+        const latestBatch = await prisma.batch.findFirst({
+            where: { batchCode: { startsWith: prefix } },
+            orderBy: { batchCode: 'desc' },
+        });
+
+        let nextNumber = 1;
+        if (latestBatch) {
+            const parts = latestBatch.batchCode.split('-');
+            const lastNum = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(lastNum)) nextNumber = lastNum + 1;
+        }
+
+        const batchCode = `${prefix}-${nextNumber}`;
+
+        return prisma.batch.create({
+            data: {
+                batchCode,
+                batchDate: now,
+                stationCode: null,
+                routeCode: null,
+                staffCode: username,
+                status: BatchStatus.ACTIVE,
+                staffId: userId,
+            },
+        });
     }
 
     /**
@@ -115,8 +183,9 @@ export class BatchesService {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        const datePrefix = `${year}${month}${day}`;
-        const prefix = `${staffCode}-${datePrefix}`;
+        const datePart = `${year}${month}${day}`;
+        const originPart = stationCode || 'NA';
+        const prefix = `${staffCode}-${originPart}-${datePart}`;
 
         const latestBatch = await prisma.batch.findFirst({
             where: { batchCode: { startsWith: prefix } },

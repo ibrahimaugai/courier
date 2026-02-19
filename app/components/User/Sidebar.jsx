@@ -10,7 +10,8 @@ import {
   Search,
   Package,
   Menu,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react'
 import { logout } from '../../lib/store'
 
@@ -28,6 +29,7 @@ export default function Sidebar({ activePage, setActivePage }) {
     { name: 'Booking', icon: Package },
     { name: 'Pickup Request', icon: Truck },
     { name: 'Track Shipment', icon: Search },
+    { name: 'Shift Close', icon: RefreshCw },
   ]
 
   const handleMenuClick = (pageName) => {
