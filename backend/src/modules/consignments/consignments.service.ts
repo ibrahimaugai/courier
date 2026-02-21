@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Injectable,
   NotFoundException,
@@ -1045,7 +1046,7 @@ export class ConsignmentsService {
         throw new BadRequestException('Failed to generate unique COD CN. Please try again.');
       }
 
-      const id = crypto.randomUUID();
+      const id = randomUUID();
       await tx.$executeRaw(
         Prisma.sql`INSERT INTO cn_reservations (id, cn_number, user_id, created_at)
         VALUES (${id}, ${cnNumber}, ${userId}, ${now})`,

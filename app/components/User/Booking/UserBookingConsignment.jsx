@@ -5,6 +5,7 @@ import { Edit, Sparkles, X, Loader2 } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { fetchAllPricing } from '../../../lib/store'
 import { api } from '../../../lib/api'
+import { printBookingSlip, printCodSlip } from '../../../lib/bookingSlipPrint'
 import Toast from '../../Toast'
 import UserShipmentDetails from './UserShipmentDetails'
 import UserShipper from './UserShipper'
@@ -769,6 +770,37 @@ export default function UserBookingConsignment() {
         message: `Booking created successfully! CN Number: ${cnNumber}`,
         type: 'success'
       })
+
+      // CN print on save – necessary for customer to get their copy
+      try {
+        const citiesMap = (cities || []).reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+        const printData = {
+          ...booking,
+          fullName: booking?.fullName ?? formData.fullName,
+          mobileNumber: booking?.mobileNumber ?? formData.mobileNumber,
+          address: booking?.address ?? formData.address,
+          consigneeFullName: booking?.consigneeName ?? formData.consigneeFullName,
+          consigneeMobileNumber: booking?.consigneePhone ?? formData.consigneeMobileNumber,
+          consigneeAddress: booking?.consigneeAddress ?? formData.consigneeAddress,
+          originCity: booking?.originCity ?? (formData.originCity ? { cityName: citiesMap[formData.originCity] || formData.originCity } : null),
+          destinationCity: booking?.destinationCity ?? (formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination } : null),
+          product: booking?.product ?? (formData.product ? { productName: formData.product } : null),
+          service: booking?.service ?? (formData.services ? { serviceName: formData.services } : null),
+        }
+        let config = {}
+        try {
+          const res = await api.getConfiguration()
+          config = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null) ?? {}
+        } catch (_) {}
+        const isCod = formData.product === 'COD' || booking?.productId === 'COD' || (booking?.product?.productName || '').toUpperCase() === 'COD'
+        if (isCod) {
+          printCodSlip(printData, { config })
+        } else {
+          printBookingSlip(printData, { config })
+        }
+      } catch (printErr) {
+        console.warn('CN print failed:', printErr)
+      }
 
       // Reset form
       setFormData({
