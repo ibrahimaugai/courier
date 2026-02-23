@@ -179,8 +179,8 @@ When admin creates a booking:
 ## CN Number Generation
 
 CN numbers are auto-generated using `CnGenerator` utility:
-- Format: `CN-YYYYMMDD-XXXXXX`
-- Example: `CN-20251231-000245`
+- Format: 10 digits `YYYYMMDDNN` (no CN prefix or dashes)
+- Example: `2026022301`
 - Unique per day
 - Transaction-safe (prevents race conditions)
 

@@ -72,6 +72,54 @@ export function printBookingSlip(booking, options = {}) {
   const helpline = options.helpline ?? '0335-2721975'
   const website = options.website ?? 'NPS.com.pk'
 
+  // Origin/Dest codes (e.g. JHN-LHE)
+  const originCode = b.originCity?.cityCode || b.originCity?.code || (typeof origin === 'string' ? origin.substring(0, 3).toUpperCase() : '—')
+  const destCode = b.destinationCity?.cityCode || b.destinationCity?.code || (typeof destination === 'string' ? destination.substring(0, 3).toUpperCase() : '—')
+  const orgDest = `${originCode}-${destCode}`
+
+  // Payment Details breakdown
+  const rateVal = b.rate != null ? Number(b.rate) : 0
+  const piecesVal = b.pieces != null ? Number(b.pieces) : 1
+  const otherVal = b.otherAmount != null ? Number(b.otherAmount) : 0
+  const codAmt = b.codAmount != null ? Number(b.codAmount) : 0
+  const payModeUpper = String(b.paymentMode || b.payMode || '').toUpperCase()
+  const isCod = payModeUpper === 'COD'
+
+  const serviceChg = rateVal * piecesVal
+  // Other Amount: positive = additional charges (Add), negative = discount
+  const valueAddedService = otherVal > 0 ? otherVal : 0
+  const discount = otherVal < 0 ? Math.abs(otherVal) : 0
+
+  const totalNum = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0))
+
+  // Handling instructions and Remarks: support %%%REMARKS%%% in handlingInstructions, or separate fields
+  const handlingRaw = b.handlingInstructions || ''
+  let instructions = '—'
+  let remarks = '—'
+  if (typeof handlingRaw === 'string' && handlingRaw.includes('%%%REMARKS%%%')) {
+    const parts = handlingRaw.split('%%%REMARKS%%%')
+    instructions = (parts[0] || '').trim() || '—'
+    remarks = (parts[1] || '').trim() || (b.remarks || '').trim() || '—'
+  } else if (handlingRaw) {
+    instructions = handlingRaw.trim() || '—'
+    remarks = (b.remarks || '').trim() || '—'
+  } else {
+    instructions = (b.instructions || '').trim() || '—'
+    remarks = (b.remarks || '').trim() || '—'
+  }
+  const insuredValue = b.declaredValue != null ? formatDecimal(b.declaredValue) : '0'
+  const customerRef = b.customerRef || b.dcReferenceNo || '—'
+  const shipperCnic = b.shipperCnic || b.customer?.cnic || b.cnic || '—'
+  const creditCardAuthId = b.creditCardAuthId || b.creditCardAuth || '—'
+
+  // Express Center Cut Of Time: heading always shown; value only when current time is outside 6 AM–8 PM
+  const now = new Date()
+  const hour = now.getHours()
+  const showCutOffValue = hour < 6 || hour >= 20
+  const cutOffTimeStr = showCutOffValue
+    ? now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+    : ''
+
   const brandName = config.stationCode || 'NPS Courier and Logistics'
   const logoFallbackSvg = `<span class="logo-svg-wrap" aria-hidden="true"><svg class="logo-svg" viewBox="0 0 40 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h32v20H4V8z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M4 14h32M12 8v20M28 8v20" stroke="currentColor" stroke-width="1.5"/></svg></span>`
   const logoBlockContent = `<div class="logo-block-inner"><img class="logo-img" src="${escapeHtml(logoUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><span class="logo-fallback">${logoFallbackSvg}<span class="logo-text">${escapeHtml(brandName)}</span></span></div>`
@@ -79,51 +127,87 @@ export function printBookingSlip(booking, options = {}) {
   const slipSection = (copyLabel, barcodeId) => `
     <div class="half">
       <div class="slip-top">
-        <div class="slip-top-row">
-          <div class="logo-row">${logoBlockContent}</div>
-          <div class="copy-type">${escapeHtml(copyLabel)}</div>
-          <div class="barcode-wrap"><svg id="${escapeHtml(barcodeId)}" class="cn-barcode"></svg></div>
+        <div class="logo-row">${logoBlockContent}</div>
+        <div class="copy-type">${escapeHtml(copyLabel)}</div>
+        <div class="barcode-wrap"><svg id="${escapeHtml(barcodeId)}" class="cn-barcode"></svg></div>
+      </div>
+
+      <table class="grid-table">
+        <tr>
+          <td class="grid-cell"><span class="grid-label">Product</span><br>${escapeHtml(product)}</td>
+          <td class="grid-cell"><span class="grid-label">Service Type</span><br>${escapeHtml(service)}</td>
+        </tr>
+        <tr>
+          <td class="grid-cell"><span class="grid-label">Payment Mode</span><br>${escapeHtml(String(payMode))}</td>
+          <td class="grid-cell"><span class="grid-label">Date-Time</span><br>${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</td>
+        </tr>
+        <tr>
+          <td class="grid-cell"><span class="grid-label">ORG-DEST</span><br>${escapeHtml(orgDest)}</td>
+          <td class="grid-cell"><span class="grid-label">Pieces | Weight</span><br>${escapeHtml(pieces)} Pcs - ${escapeHtml(weightStr)}</td>
+        </tr>
+        <tr>
+          <td class="grid-cell"><span class="grid-label">Staff #</span><br>${escapeHtml(staffCode)}</td>
+          <td class="grid-cell"><span class="grid-label">Route Code</span><br>${escapeHtml(routeCode)}</td>
+        </tr>
+      </table>
+
+      <div class="section">
+        <div class="kv-row" style="margin-bottom:4px"><span class="kv-label">Origin:</span> ${escapeHtml(origin)} | <span class="kv-label">Destination:</span> ${escapeHtml(destination)} </div>
+      </div>
+
+      <div class="section shipper-consignee-row">
+        <div class="shipper-col">
+          <div class="section-title">Shipper Details</div>
+          <div class="kv-row"><span class="kv-label">Name:</span> ${escapeHtml(shipperName)}</div>
+          <div class="kv-row"><span class="kv-label">Phone:</span> ${escapeHtml(shipperPhone)}</div>
+          <div class="kv-row"><span class="kv-label">Address:</span> ${escapeHtml(shipperAddress)}</div>
+        </div>
+        <div class="consignee-col">
+          <div class="section-title">Consignee Details</div>
+          <div class="kv-row"><span class="kv-label">Name:</span> ${escapeHtml(consigneeName)}</div>
+          <div class="kv-row"><span class="kv-label">Phone:</span> ${escapeHtml(consigneePhone)}</div>
+          <div class="kv-row"><span class="kv-label">Address:</span> ${escapeHtml(consigneeAddress)}</div>
         </div>
       </div>
-      <div class="two-cols">
-        <div class="col-left">
-          <div class="row-item"><span class="row-label">Product:</span> ${escapeHtml(product)}</div>
-          <div class="row-item"><span class="row-label">Service:</span> ${escapeHtml(service)}</div>
-          <div class="row-item"><span class="row-label">Origin:</span> ${escapeHtml(origin)}</div>
-          <div class="row-item"><span class="row-label">Destination:</span> ${escapeHtml(destination)}</div>
-          <div class="row-item"><span class="row-label">Weight:</span> ${escapeHtml(weightStr)}</div>
-          <div class="row-item"><span class="row-label">Pieces:</span> ${escapeHtml(pieces)}</div>
-          <div class="row-item"><span class="row-label">Booker Name:</span> ${escapeHtml(username)}</div>
-          <div class="row-item"><span class="row-label">Staff Code:</span> ${escapeHtml(staffCode)}</div>
-          <div class="row-item"><span class="row-label">Route Code:</span> ${escapeHtml(routeCode)}</div>
+
+      <div class="section">
+        <div class="section-title">Item Details</div>
+        <table class="doc-table">
+          <tr><th>Description</th><th>Qty</th><th>Amount</th></tr>
+          <tr><td>${escapeHtml(content)}</td><td>${escapeHtml(pieces)}</td><td>${escapeHtml(amountStr)}</td></tr>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="kv-row"><span class="kv-label">Insured Value:</span> Rs. ${escapeHtml(insuredValue)}</div>
+        <div class="kv-row"><span class="kv-label">Customer Ref #:</span> ${escapeHtml(customerRef)}</div>
+        <div class="kv-row"><span class="kv-label">Express Center Cut Of Time:</span> ${cutOffTimeStr ? escapeHtml(cutOffTimeStr) : '—'}</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Payment Details</div>
+        <table class="payment-table">
+          <tr><td class="pay-label">Service CHG:</td><td class="pay-val">${escapeHtml(formatDecimal(serviceChg))}</td></tr>
+          ${discount > 0 ? `<tr><td class="pay-label">Discount:</td><td class="pay-val">${escapeHtml(formatDecimal(discount))}</td></tr>` : ''}
+          ${valueAddedService > 0 ? `<tr><td class="pay-label">Other Amount (Add):</td><td class="pay-val">${escapeHtml(formatDecimal(valueAddedService))}</td></tr>` : ''}
+          ${isCod && codAmt > 0 ? `<tr><td class="pay-label">COD Amount:</td><td class="pay-val">${escapeHtml(formatDecimal(codAmt))}</td></tr>` : ''}
+          <tr><td class="pay-label pay-total">TOTAL:</td><td class="pay-val pay-total">${escapeHtml(formatDecimal(totalNum))}</td></tr>
+        </table>
+      </div>
+
+      <div class="section remarks-instructions-row">
+        <div class="remarks-col">
+          <div class="section-title">Remarks</div>
+          <div class="remarks-box">${escapeHtml(remarks)}</div>
         </div>
-        <div class="col-right">
-          <div class="row-item"><span class="row-label">Amount:</span> ${escapeHtml(amountStr)}</div>
-          <div class="row-item"><span class="row-label">Payment:</span> ${escapeHtml(String(payMode).toLowerCase())}</div>
-          <div class="row-item"><span class="row-label">Date:</span> ${escapeHtml(dateStr)}</div>
-          <div class="row-item"><span class="row-label">Time:</span> ${escapeHtml(timeStr)}</div>
-          ${other !== '—' ? `<div class="row-item"><span class="row-label">Other:</span> ${escapeHtml(other)}</div>` : ''}
-          ${preferredDeliveryLine || ''}
+        <div class="instructions-col">
+          <div class="section-title">Instructions</div>
+          <div class="remarks-box">${escapeHtml(instructions)}</div>
         </div>
       </div>
-      <div class="packet-section">
-        <div class="packet-title">PACKET CONTENT:</div>
-        <div class="packet-value">${escapeHtml(content)}</div>
-      </div>
-      <div class="party-section">
-        <div class="party-block">
-          <div class="party-title">SHIPPER:</div>
-          <div class="party-line">${escapeHtml(shipperName)}</div>
-          <div class="party-line">${escapeHtml(shipperPhone)}</div>
-          <div class="party-line">${escapeHtml(shipperAddress)}</div>
-        </div>
-        <div class="party-block">
-          <div class="party-title">CONSIGNEE:</div>
-          <div class="party-line">${escapeHtml(consigneeName)}</div>
-          <div class="party-line">${escapeHtml(consigneePhone)}</div>
-          <div class="party-line">${escapeHtml(consigneeAddress)}</div>
-        </div>
-      </div>
+
+      ${preferredDeliveryLine ? `<div class="section">${preferredDeliveryLine}</div>` : ''}
+
       <div class="slip-footer">
         <div class="footer-left">
           <div>Helpline: ${escapeHtml(helpline)}</div>
@@ -133,6 +217,7 @@ export function printBookingSlip(booking, options = {}) {
           <div>Customer Signature: _________________________</div>
         </div>
       </div>
+
     </div>`
 
   const html = `<!DOCTYPE html>
@@ -141,45 +226,49 @@ export function printBookingSlip(booking, options = {}) {
   <meta charset="utf-8">
   <title>Booking Slip - ${escapeHtml(cnDisplay)}</title>
   <style>
-    @page { size: A4 portrait; margin: 12mm; }
+    @page { size: A4 landscape; margin: 10mm; }
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; color: #111; font-size: 11px; line-height: 1.4; }
-    .page { width: 210mm; min-height: 297mm; padding: 10mm; margin: 0 auto; }
-    .half { width: 100%; border: 1px solid #333; padding: 14px 16px; margin-bottom: 0; background: #fff; }
-    .slip-top { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #333; }
-    .slip-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; color: #111; font-size: 10px; line-height: 1.35; }
+    .page { width: 297mm; min-height: 210mm; padding: 8mm; margin: 0 auto; display: flex; flex-direction: row; gap: 12px; }
+    .half { flex: 1; min-width: 0; border: 1px solid #333; padding: 10px 12px; background: #fff; }
+    .slip-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #333; flex-wrap: wrap; }
     .logo-row { flex-shrink: 0; }
-    .logo-block-inner { display: flex; align-items: center; justify-content: flex-start; }
-    .logo-img { max-height: 44px; max-width: 160px; display: block; object-fit: contain; }
-    .logo-fallback { display: none; align-items: center; gap: 8px; }
+    .logo-block-inner { display: flex; align-items: center; }
+    .logo-img { max-height: 36px; max-width: 120px; object-fit: contain; }
+    .logo-fallback { display: none; align-items: center; gap: 6px; }
     .logo-svg-wrap { display: inline-flex; }
-    .logo-svg { width: 36px; height: 32px; color: #111; }
-    .logo-text { font-weight: 700; font-size: 14px; color: #111; }
-    .copy-type { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; flex: 1; text-align: center; }
-    .barcode-wrap { flex-shrink: 0; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
+    .logo-svg { width: 28px; height: 24px; color: #111; }
+    .logo-text { font-weight: 700; font-size: 12px; }
+    .cn-block { flex: 1; text-align: center; }
+    .cn-label { font-weight: 700; }
+    .cn-value { font-weight: 900; font-size: 14px; letter-spacing: 0.05em; }
+    .copy-type { font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .barcode-wrap { min-height: 36px; }
     .cn-barcode { display: block; }
-    .cn-number { font-weight: 700; font-size: 14px; letter-spacing: 0.05em; }
-    .two-cols { display: flex; gap: 24px; margin-bottom: 12px; }
-    .col-left { flex: 1; }
-    .col-right { flex: 1; text-align: right; }
-    .row-item { margin-bottom: 4px; }
-    .row-label { font-weight: 800; }
-    .packet-section { margin-bottom: 12px; padding: 6px 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }
-    .packet-title { font-weight: 700; font-size: 11px; margin-bottom: 4px; }
-    .packet-value { font-size: 11px; }
-    .party-section { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
-    .party-block { }
-    .party-title { font-weight: 700; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
-    .party-line { font-size: 11px; margin-bottom: 2px; }
-    .slip-footer { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 10px; border-top: 1px solid #333; font-size: 10px; }
-    .footer-left { }
-    .footer-right { }
-    .cut-line { border: none; border-top: 2px dashed #666; margin: 16px 0; position: relative; }
-    .cut-line::after { content: 'Cut here — Customer Copy above, Accounts copy below'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; padding: 0 12px; font-size: 10px; color: #666; font-weight: 600; }
+    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    .grid-table td { border: 1px solid #333; padding: 4px 6px; width: 50%; }
+    .grid-label { font-weight: 700; font-size: 8px; text-transform: uppercase; }
+    .section { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
+    .section-title { font-weight: 700; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
+    .kv-row { font-size: 9px; margin-bottom: 2px; }
+    .kv-label { font-weight: 700; margin-right: 4px; }
+    .doc-table, .payment-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    .doc-table th, .doc-table td, .payment-table td { border: 1px solid #ccc; padding: 3px 6px; }
+    .doc-table th { font-weight: 700; }
+    .payment-table .pay-label { font-weight: 600; }
+    .payment-table .pay-val { text-align: right; }
+    .payment-table .pay-total { font-weight: 900; border-top: 1px solid #333; }
+    .remarks-box { min-height: 20px; font-size: 9px; }
+    .remarks-instructions-row { display: flex; gap: 16px; }
+    .remarks-col, .instructions-col { flex: 1; min-width: 0; }
+    .shipper-consignee-row { display: flex; gap: 16px; }
+    .shipper-col, .consignee-col { flex: 1; min-width: 0; }
+    .slip-footer { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid #333; font-size: 8px; margin-top: 6px; }
+    .slip-footer-terms { margin-top: 4px; font-size: 7px; color: #555; text-align: center; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .page { box-shadow: none; }
-      .half { box-shadow: none; }
+      .page { box-shadow: none; gap: 8px; }
+      .half { box-shadow: none; break-inside: avoid; }
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
@@ -187,9 +276,8 @@ export function printBookingSlip(booking, options = {}) {
 <body>
   <div class="page">
     <span id="cn-value" style="display:none">${escapeHtml(cn)}</span>
-    ${slipSection('Customer Copy', 'barcode-shipper')}
-    <hr class="cut-line" />
-    ${slipSection('Accounts Copy', 'barcode-accounts')}
+    ${slipSection('Customer Copy', 'barcode-left')}
+    ${slipSection('Accounts Copy', 'barcode-right')}
   </div>
   <script>
     (function() {
@@ -197,10 +285,10 @@ export function printBookingSlip(booking, options = {}) {
       function doPrint() {
         try {
           if (cn && typeof JsBarcode !== 'undefined') {
-            var s = document.getElementById('barcode-shipper');
-            var a = document.getElementById('barcode-accounts');
-            if (s) JsBarcode(s, cn, { format: 'CODE128', width: 2, height: 50 });
-            if (a) JsBarcode(a, cn, { format: 'CODE128', width: 2, height: 50 });
+            var left = document.getElementById('barcode-left');
+            var right = document.getElementById('barcode-right');
+            if (left) JsBarcode(left, cn, { format: 'CODE128', width: 1.5, height: 40 });
+            if (right) JsBarcode(right, cn, { format: 'CODE128', width: 1.5, height: 40 });
           }
         } catch (e) {}
         window.print();
@@ -252,18 +340,35 @@ export function printCodSlip(booking, options = {}) {
   const pieces = b.pieces != null ? b.pieces : '—'
   const weightStr = formatWeight(b)
   const content = b.packetContent || '—'
-  const total = b.totalAmount != null ? formatDecimal(b.totalAmount) : (b.codAmount != null ? formatDecimal(b.codAmount) : '—')
-  const codAmountStr = total !== '—' ? `RS${String(total).replace(/\s/g, '')}` : 'RS0'
+  const rateVal = b.rate != null ? Number(b.rate) : 0
+  const piecesVal = b.pieces != null ? Number(b.pieces) : 1
+  const otherVal = b.otherAmount != null ? Number(b.otherAmount) : 0
+  const shippingChargesVal = rateVal * piecesVal + otherVal
+  const shippingCharges = formatDecimal(shippingChargesVal)
+  const totalVal = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : null
+  const codAmountVal = b.codAmount != null ? parseFloat(String(b.codAmount)) : null
+  const codAmountNum = codAmountVal != null && !isNaN(codAmountVal)
+    ? codAmountVal
+    : (totalVal != null && !isNaN(totalVal) ? Math.max(0, totalVal - shippingChargesVal) : 0)
+  const codAmount = codAmountNum > 0 ? formatDecimal(codAmountNum) : '—'
+  const totalNum = shippingChargesVal + codAmountNum
+  const total = b.totalAmount != null ? formatDecimal(b.totalAmount) : formatDecimal(totalNum)
+  const codAmountStr = `RS${String(Math.round(totalNum)).replace(/[\s,]/g, '')}` || 'RS0'
   const bookingDt = b.bookingDate ? new Date(b.bookingDate) : (b.createdAt ? new Date(b.createdAt) : new Date())
   const dateStr = bookingDt.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
   const timeStr = bookingDt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
   const declaredValue = b.declaredValue != null ? formatDecimal(b.declaredValue) : '—'
-  const fragile = b.fragile != null ? (b.fragile ? 'YES' : 'NO') : 'NO'
-  const remarks = b.handlingInstructions || b.remarks || '—'
-  const customerRef = b.customerRef || b.dcReferenceNo || '—'
+  const handlingRaw = b.handlingInstructions || ''
+  const parts = typeof handlingRaw === 'string' && handlingRaw.includes('%%%REMARKS%%%')
+    ? handlingRaw.split('%%%REMARKS%%%')
+    : handlingRaw ? [handlingRaw, ''] : ['', '']
+  const handlingInstructions = (parts[0] || '').trim() || '—'
+  const remarks = (parts[1] || (b.remarks || '')).trim() || '—'
+  const customerRef = (b.customerRef || b.dcReferenceNo || '').toString().trim() || '—'
 
   const disclaimer = "Please don't accept, if shipment is not intact. Before paying the COD, shipment can not be open."
   const contactLine = `Incase of complaints, pls contact to ${escapeHtml(shipperName)}. Ph: ${escapeHtml(shipperPhone || '—')}`
+  const helpline = options.helpline ?? '0335-2721975'
 
   const codSlipSection = (copyLabel, cnBarcodeId, codBarcodeId) => `
     <div class="cod-slip">
@@ -287,6 +392,7 @@ export function printCodSlip(booking, options = {}) {
           <td class="cod-td-party" colspan="2">
             <div class="cod-label">Shipper</div>
             <div class="cod-value">${escapeHtml(shipperName)}</div>
+            <div class="cod-value">Ph: ${escapeHtml(shipperPhone)}</div>
             <div class="cod-value">${escapeHtml(shipperAddress || origin)}</div>
           </td>
           <td class="cod-td-party">
@@ -302,16 +408,14 @@ export function printCodSlip(booking, options = {}) {
           <td class="cod-td-val">${escapeHtml(weightStr)}</td>
         </tr>
         <tr>
-          <td class="cod-td-label">Fragile</td>
-          <td class="cod-td-val">${escapeHtml(fragile)}</td>
           <td class="cod-td-label">Declared Insurance Value</td>
-          <td class="cod-td-val">${escapeHtml(declaredValue)}</td>
+          <td class="cod-td-val" colspan="3">${escapeHtml(declaredValue)}</td>
         </tr>
         <tr>
           <td class="cod-td-cod" colspan="2"><strong>COD AMOUNT</strong></td>
           <td class="cod-td-cod-barcode" colspan="2">
             <div class="cod-barcode-wrap cod-amount-barcode"><svg id="${escapeHtml(codBarcodeId)}" class="cod-amount-barcode-svg"></svg></div>
-            <div class="cod-amount-value">${escapeHtml(codAmountStr)}</div>
+            <div class="cod-amount-value">Rs. ${escapeHtml(total)}</div>
           </td>
         </tr>
         <tr>
@@ -319,14 +423,29 @@ export function printCodSlip(booking, options = {}) {
           <td class="cod-td-val" colspan="3">${escapeHtml(content)}</td>
         </tr>
         <tr>
-          <td class="cod-td-label">Remarks</td>
-          <td class="cod-td-val">${escapeHtml(remarks)}</td>
+          <td class="cod-td-label">Payment</td>
+          <td class="cod-td-val" colspan="3">
+            <div><strong>Shipping:</strong> Rs. ${escapeHtml(shippingCharges)}</div>
+            <div><strong>Order Amount:</strong> Rs. ${escapeHtml(codAmount)}</div>
+            <div><strong>Total:</strong> Rs. ${escapeHtml(total)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="cod-td-label">Handling Instructions</td>
+          <td class="cod-td-val" colspan="3">${escapeHtml(handlingInstructions)}</td>
+        </tr>
+        <tr>
           <td class="cod-td-label">Customer Ref. #</td>
-          <td class="cod-td-val">${escapeHtml(customerRef)}</td>
+          <td class="cod-td-val" colspan="3">${escapeHtml(customerRef)}</td>
+        </tr>
+        <tr>
+          <td class="cod-td-label">Remarks</td>
+          <td class="cod-td-val" colspan="3">${escapeHtml(remarks)}</td>
         </tr>
       </table>
       <div class="cod-disclaimer">${disclaimer}</div>
       <div class="cod-contact">${contactLine}</div>
+      <div class="cod-helpline">Helpline: ${escapeHtml(helpline)}</div>
       <div class="cod-cut">-------------</div>
     </div>`
 
@@ -366,6 +485,7 @@ export function printCodSlip(booking, options = {}) {
     .cod-amount-value { font-weight: 700; font-size: 12px; margin-top: 2px; }
     .cod-disclaimer { font-size: 8px; margin-top: 6px; padding-top: 4px; border-top: 1px solid #ccc; }
     .cod-contact { font-size: 8px; margin-top: 2px; }
+    .cod-helpline { font-size: 8px; margin-top: 2px; font-weight: 700; }
     .cod-cut { font-size: 8px; color: #666; margin-top: 4px; text-align: center; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -392,9 +512,9 @@ export function printCodSlip(booking, options = {}) {
           if (typeof JsBarcode !== 'undefined') {
             for (var i = 1; i <= 3; i++) {
               var el = document.getElementById('cod-cn-' + i);
-              if (el && cn) JsBarcode(el, cn, { format: 'CODE128', width: 1.5, height: 36 });
+              if (el && cn) JsBarcode(el, cn, { format: 'CODE128', width: 1.5, height: 36, displayValue: false });
               var amtEl = document.getElementById('cod-amt-' + i);
-              if (amtEl && amt) JsBarcode(amtEl, amt, { format: 'CODE128', width: 1.5, height: 28 });
+              if (amtEl && amt) JsBarcode(amtEl, amt, { format: 'CODE128', width: 1.5, height: 28, displayValue: false });
             }
           }
         } catch (e) {}

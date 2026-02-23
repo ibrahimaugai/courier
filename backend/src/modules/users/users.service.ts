@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -35,6 +35,49 @@ export class UsersService {
         isActive: true,
         lastLogin: true,
         createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Get pending customers (USER role, isActive: false) for SUPER_ADMIN approval.
+   */
+  async findPendingCustomers() {
+    return this.prisma.user.findMany({
+      where: { role: 'USER', isActive: false },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Approve a customer (set isActive: true). SUPER_ADMIN only.
+   */
+  async approveCustomer(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    if (user.role !== 'USER') {
+      throw new BadRequestException('Can only approve customer (USER role) accounts');
+    }
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: true },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        isActive: true,
+        updatedAt: true,
       },
     });
   }
@@ -87,5 +130,37 @@ export class UsersService {
       where: { id },
       data: { isActive: false },
     });
+  }
+
+  /**
+   * Permanently delete an employee (SUPER_ADMIN only). Cannot delete self or other SUPER_ADMINs.
+   */
+  async deletePermanently(id: string, currentUserId: string) {
+    if (id === currentUserId) {
+      throw new BadRequestException('Cannot delete your own account');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot permanently delete a SUPER_ADMIN');
+    }
+    if (user.role !== 'ADMIN') {
+      throw new BadRequestException('Can only permanently delete admin employees');
+    }
+
+    try {
+      await this.prisma.user.delete({ where: { id } });
+      return { deleted: true, id };
+    } catch (error: any) {
+      if (error?.code === 'P2003' || error?.message?.includes('foreign key')) {
+        throw new BadRequestException(
+          'Cannot delete: this user has associated records. Deactivate the user instead.',
+        );
+      }
+      throw error;
+    }
   }
 }

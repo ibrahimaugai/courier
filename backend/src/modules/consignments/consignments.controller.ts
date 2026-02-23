@@ -200,6 +200,26 @@ export class ConsignmentsController {
     return this.consignmentsService.update(id, updateData, req.user.id);
   }
 
+  @Patch(':id/status')
+  @ApiOperation({ summary: 'Update consignment status (shipment tracking)' })
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string; remarks?: string },
+    @Request() req,
+  ) {
+    return this.consignmentsService.updateStatus(id, body.status, body.remarks, req.user.id);
+  }
+
+  @Post(':id/remarks')
+  @ApiOperation({ summary: 'Add remarks to consignment (shipment tracking)' })
+  async addRemarks(
+    @Param('id') id: string,
+    @Body() body: { remarks: string },
+    @Request() req,
+  ) {
+    return this.consignmentsService.addRemarks(id, body.remarks, req.user.id);
+  }
+
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel a consignment' })
   async cancel(

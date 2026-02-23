@@ -31,6 +31,7 @@ import CnVoid from '../components/admin/CnVoid'
 import Configuration from '../components/admin/Configration'
 import CnAllocation from '../components/admin/CnAllocation'
 import EmployeeRegistration from '../components/admin/EmployeeRegistration'
+import CustomerApproval from '../components/admin/CustomerApproval'
 import BookingRequests from '../components/admin/bookings/BookingRequests'
 import PricingRates from '../components/admin/PricingRates'
 import EditBooking from '../components/admin/bookings/EditBooking'
@@ -117,6 +118,8 @@ export default function AdminPanel() {
         return <EditBooking />
       case 'Employee Registration':
         return <EmployeeRegistration />
+      case 'Customer Approval':
+        return <CustomerApproval />
       case 'Pricing Rates':
         return <PricingRates />
       case 'Admin Home':

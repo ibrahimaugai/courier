@@ -53,6 +53,7 @@ export default function UserBookingConsignment() {
     cnNumber: '',
     pieces: '1',
     handlingInstructions: '',
+    remarks: '',
     packetContent: '',
     services: '',
     payMode: '',
@@ -78,7 +79,9 @@ export default function UserBookingConsignment() {
     consigneeZipCode: '',
     // Other Amount
     otherAmount: '',
+    codAmount: '',
     totalAmount: 0,
+    customerRef: '',
     originCity: '', // Should be set based on user profile/selection
     preferredDeliveryDate: '',
     preferredDeliveryTime: '',
@@ -308,7 +311,11 @@ export default function UserBookingConsignment() {
 
     if (hasRequiredFields && rate > 0) {
       finalRate = rate
-      totalAmount = (rate * pcs) + docTotal + other + subservices
+      const shippingCharges = (rate * pcs) + docTotal + other + subservices
+      const codAmt = parseFloat(formData.codAmount || '0') || 0
+      totalAmount = formData.product === 'COD'
+        ? shippingCharges + codAmt
+        : shippingCharges
     } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && (subservices > 0 || docTotal > 0 || other > 0 || formData.services)) {
       totalAmount = docTotal + other + subservices
     }
@@ -323,6 +330,7 @@ export default function UserBookingConsignment() {
     calculateRate,
     formData.pieces,
     formData.otherAmount,
+    formData.codAmount,
     formData.product,
     formData.services,
     selectedDocuments,
@@ -698,11 +706,11 @@ export default function UserBookingConsignment() {
       !formData.weight || !formData.packetContent || !formData.mobileNumber || !formData.fullName ||
       !formData.address || !formData.consigneeMobileNumber || !formData.consigneeFullName ||
       !formData.consigneeAddress) {
-      setToast({
-        isVisible: true,
-        message: 'Please fill all required fields',
-        type: 'error'
-      })
+      setToast({ isVisible: true, message: 'Please fill all required fields', type: 'error' })
+      return
+    }
+    if (formData.product === 'COD' && (!formData.codAmount || parseFloat(formData.codAmount) < 0)) {
+      setToast({ isVisible: true, message: 'Please enter COD amount for COD shipments', type: 'error' })
       return
     }
 
@@ -722,7 +730,9 @@ export default function UserBookingConsignment() {
         originCityId: formData.originCity,
         cnNumber: formData.cnNumber || undefined,
         pieces: parseInt(formData.pieces || '1'),
-        handlingInstructions: formData.handlingInstructions || undefined,
+        handlingInstructions: (formData.handlingInstructions || formData.remarks)
+          ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+          : undefined,
         packetContent: formData.packetContent,
         payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
         preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
@@ -754,6 +764,8 @@ export default function UserBookingConsignment() {
         rate: formData.rate || 0,
         otherAmount: parseFloat(formData.otherAmount) || 0,
         totalAmount: formData.totalAmount || 0,
+        codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
+        dcReferenceNo: formData.customerRef || undefined,
         chargeableWeight: formData.chargeableWeight || 0,
 
         // Documents
@@ -774,6 +786,9 @@ export default function UserBookingConsignment() {
       // CN print on save – necessary for customer to get their copy
       try {
         const citiesMap = (cities || []).reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+        const handlingInstructionsForPrint = (formData.handlingInstructions || formData.remarks)
+          ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+          : (booking?.handlingInstructions || '')
         const printData = {
           ...booking,
           fullName: booking?.fullName ?? formData.fullName,
@@ -786,6 +801,11 @@ export default function UserBookingConsignment() {
           destinationCity: booking?.destinationCity ?? (formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination } : null),
           product: booking?.product ?? (formData.product ? { productName: formData.product } : null),
           service: booking?.service ?? (formData.services ? { serviceName: formData.services } : null),
+          handlingInstructions: handlingInstructionsForPrint || booking?.handlingInstructions,
+          remarks: formData.remarks || booking?.remarks,
+          codAmount: formData.product === 'COD' ? (parseFloat(formData.codAmount) || booking?.codAmount) : booking?.codAmount,
+          customerRef: formData.customerRef || booking?.dcReferenceNo || booking?.customerRef,
+          dcReferenceNo: formData.customerRef || booking?.dcReferenceNo,
         }
         let config = {}
         try {
@@ -809,6 +829,7 @@ export default function UserBookingConsignment() {
         cnNumber: '',
         pieces: '1',
         handlingInstructions: '',
+        remarks: '',
         packetContent: '',
         services: '',
         payMode: '',
@@ -831,7 +852,9 @@ export default function UserBookingConsignment() {
         consigneeEmailAddress: '',
         consigneeZipCode: '',
         otherAmount: '',
+        codAmount: '',
         totalAmount: 0,
+        customerRef: '',
         originCity: '',
         preferredDeliveryDate: '',
         preferredDeliveryTime: '',

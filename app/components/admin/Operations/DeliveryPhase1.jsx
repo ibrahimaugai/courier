@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Calendar, FileSpreadsheet, Copy, Printer, FileText, ChevronsUpDown, Eye, Plus, Search, User, Loader2, Truck, Package, ArrowRight, UserCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
+import { printDeliverySheetReport } from '../../../lib/deliverySheetPrint'
 
 export default function DeliveryPhase1({ setActivePage }) {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
@@ -37,6 +38,33 @@ export default function DeliveryPhase1({ setActivePage }) {
       setActivePage('Create Delivery Phase 1')
     } else {
       console.error("setActivePage prop missing")
+    }
+  }
+
+  const [printLoadingId, setPrintLoadingId] = useState(null)
+  const handlePrintDeliverySheet = async (sheetId) => {
+    setPrintLoadingId(sheetId)
+    try {
+      const result = await api.getDeliverySheetDetails(sheetId)
+      const sheet = result?.data || result
+      const bookings = Array.isArray(sheet?.bookings) ? sheet.bookings : []
+      const riderName = sheet.rider?.name || sheet.riderName || '—'
+      const vehicleNo = sheet.vehicle?.vehicleNumber || sheet.vehicleNo || '—'
+      const originStation = sheet.originStation?.stationCode || sheet.originStation?.stationName || '—'
+      const printed = printDeliverySheetReport(bookings, {
+        sheetNumber: sheet.sheetNumber ?? '—',
+        riderName,
+        vehicleNo,
+        originStation,
+        sheetDate: sheet.sheetDate
+      })
+      if (!printed) {
+        console.warn('Popup blocked: allow popups to print delivery sheet.')
+      }
+    } catch (err) {
+      console.error('Failed to fetch sheet for print:', err)
+    } finally {
+      setPrintLoadingId(null)
     }
   }
 
@@ -180,7 +208,14 @@ export default function DeliveryPhase1({ setActivePage }) {
                     <td className="px-4 py-4 text-xs font-bold text-gray-400">{row.createdByUser?.username || 'Admin'}</td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <button className="p-1.5 bg-sky-100 text-sky-600 rounded hover:bg-sky-200" title="Print"><Printer className="w-4 h-4" /></button>
+                        <button
+                          onClick={() => handlePrintDeliverySheet(row.id)}
+                          disabled={printLoadingId === row.id}
+                          className="p-1.5 bg-sky-100 text-sky-600 rounded hover:bg-sky-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Print"
+                        >
+                          {printLoadingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                        </button>
                         <button
                           onClick={() => setActivePage && setActivePage('Edit Delivery Phase 1', row.id)}
                           className="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide hover:bg-amber-600 transition-colors shadow-md"

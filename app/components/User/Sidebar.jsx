@@ -11,7 +11,8 @@ import {
   Package,
   Menu,
   X,
-  RefreshCw
+  RefreshCw,
+  Calendar
 } from 'lucide-react'
 import { logout } from '../../lib/store'
 
@@ -27,6 +28,7 @@ export default function Sidebar({ activePage, setActivePage }) {
 
   const menuItems = [
     { name: 'Booking', icon: Package },
+    { name: 'RMS Today', icon: Calendar },
     { name: 'Pickup Request', icon: Truck },
     { name: 'Track Shipment', icon: Search },
     { name: 'Shift Close', icon: RefreshCw },

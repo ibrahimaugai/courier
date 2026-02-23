@@ -18,7 +18,8 @@ import {
   Package,
   FileText,
   DollarSign,
-  Edit
+  Edit,
+  Users
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
@@ -57,6 +58,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
 
   const menuItems = [
     { name: 'Employee Registration', icon: Package },
+    { name: 'Customer Approval', icon: Users },
     { name: 'Batch Cut Off', icon: Scissors },
     { name: 'Shift Close', icon: RefreshCw },
     { name: 'Configuration', icon: Settings },
@@ -189,8 +191,8 @@ export default function AdminSidebar({ activePage, setActivePage }) {
 
         {/* Other Menu Items */}
         {menuItems.map((item, index) => {
-          // Hide Employee Registration and Pricing Rates for non-SUPER_ADMIN users
-          if ((item.name === 'Employee Registration' || item.name === 'Pricing Rates') && user?.role !== 'SUPER_ADMIN') {
+          // Hide Employee Registration, Customer Approval and Pricing Rates for non-SUPER_ADMIN users
+          if ((item.name === 'Employee Registration' || item.name === 'Customer Approval' || item.name === 'Pricing Rates') && user?.role !== 'SUPER_ADMIN') {
             return null
           }
 

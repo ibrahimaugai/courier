@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { UserPlus, Users, Eye, EyeOff, Loader2, CheckCircle, X, Search, Edit2, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { useSelector } from 'react-redux'
+import { UserPlus, Users, Eye, EyeOff, Loader2, CheckCircle, X, Search, KeyRound, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 export default function EmployeeRegistration() {
@@ -11,6 +12,25 @@ export default function EmployeeRegistration() {
     const [showPassword, setShowPassword] = useState(false)
     const [employees, setEmployees] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
+    const [resetModal, setResetModal] = useState(null)
+    const [resetPassword, setResetPassword] = useState('')
+    const [resetRevealed, setResetRevealed] = useState(null)
+    const [resetLoading, setResetLoading] = useState(false)
+    const [deleteConfirm, setDeleteConfirm] = useState(null)
+    const [deleteLoading, setDeleteLoading] = useState(false)
+
+    const { user: reduxUser } = useSelector((state) => state.auth || {})
+    const currentUser = useMemo(() => {
+        if (reduxUser?.role) return reduxUser
+        try {
+            const stored = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+            return stored ? JSON.parse(stored) : null
+        } catch {
+            return null
+        }
+    }, [reduxUser])
+
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN'
 
     const [formData, setFormData] = useState({
         username: '',
@@ -77,6 +97,45 @@ export default function EmployeeRegistration() {
             emp.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             emp.staffCode?.toLowerCase().includes(searchTerm.toLowerCase())
         )
+
+    const handleResetPassword = async () => {
+        if (!resetModal || !resetPassword.trim()) return
+        setResetLoading(true)
+        setError('')
+        try {
+            const res = await api.resetEmployeePassword(resetModal.id, resetPassword.trim())
+            setResetRevealed({ password: res.password, username: res.username })
+            setResetPassword('')
+        } catch (err) {
+            setError(err?.message || 'Failed to reset password')
+        } finally {
+            setResetLoading(false)
+        }
+    }
+
+    const handleDeletePermanently = async () => {
+        if (!deleteConfirm) return
+        setDeleteLoading(true)
+        setError('')
+        try {
+            await api.deleteUserPermanently(deleteConfirm.id)
+            setSuccess('Employee deleted permanently')
+            setDeleteConfirm(null)
+            await fetchEmployees()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err) {
+            setError(err?.message || 'Failed to delete employee')
+        } finally {
+            setDeleteLoading(false)
+        }
+    }
+
+    const closeResetModal = () => {
+        setResetModal(null)
+        setResetPassword('')
+        setResetRevealed(null)
+        setError('')
+    }
 
     return (
         <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 animate-fade-in">
@@ -201,15 +260,17 @@ export default function EmployeeRegistration() {
                                         <th className="px-6 py-4">SR</th>
                                         <th className="px-6 py-4">USERNAME</th>
                                         <th className="px-6 py-4">STAFF CODE</th>
+                                        {isSuperAdmin && <th className="px-6 py-4">PASSWORD</th>}
                                         <th className="px-6 py-4">ROLE</th>
                                         <th className="px-6 py-4">STATUS</th>
                                         <th className="px-6 py-4">CREATED</th>
+                                        {isSuperAdmin && <th className="px-6 py-4">ACTIONS</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {filteredEmployees.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="py-24 px-10 text-center">
+                                            <td colSpan={isSuperAdmin ? 8 : 6} className="py-24 px-10 text-center">
                                                 <Users className="w-12 h-12 text-gray-100 mx-auto mb-4" />
                                                 <p className="text-sm font-black text-gray-300 uppercase tracking-widest">
                                                     {searchTerm ? 'No employees found' : 'No employees registered'}
@@ -226,6 +287,19 @@ export default function EmployeeRegistration() {
                                                 <td className="px-6 py-4 text-sm font-bold text-gray-600">
                                                     {employee.staffCode || 'N/A'}
                                                 </td>
+                                                {isSuperAdmin && (
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-gray-400 text-xs">••••••••</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setResetModal(employee)}
+                                                            className="ml-2 px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded hover:bg-sky-200 font-bold flex items-center gap-1 inline-flex"
+                                                        >
+                                                            <KeyRound className="w-3 h-3" />
+                                                            Reset
+                                                        </button>
+                                                    </td>
+                                                )}
                                                 <td className="px-6 py-4">
                                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${employee.role === 'SUPER_ADMIN' ? 'bg-purple-50 text-purple-700' :
                                                         employee.role === 'ADMIN' ? 'bg-sky-50 text-sky-700' :
@@ -245,6 +319,20 @@ export default function EmployeeRegistration() {
                                                 <td className="px-6 py-4 text-xs text-gray-600">
                                                     {new Date(employee.createdAt).toLocaleDateString()}
                                                 </td>
+                                                {isSuperAdmin && (
+                                                    <td className="px-6 py-4">
+                                                        {employee.role === 'ADMIN' && employee.id !== currentUser?.id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setDeleteConfirm(employee)}
+                                                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 font-bold flex items-center gap-1"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                                Delete
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))
                                     )}
@@ -254,6 +342,90 @@ export default function EmployeeRegistration() {
                     </div>
                 </div>
             </div>
+
+            {/* Reset Password Modal */}
+            {resetModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-black text-gray-900">Reset Password</h3>
+                            <button onClick={closeResetModal} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {resetRevealed ? (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600">
+                                    New password for <strong>{resetRevealed.username}</strong>:
+                                </p>
+                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl font-mono font-black text-emerald-800 break-all">
+                                    {resetRevealed.password}
+                                </div>
+                                <p className="text-xs text-amber-600">Save this password. It cannot be shown again.</p>
+                                <button
+                                    onClick={closeResetModal}
+                                    className="w-full py-3 bg-sky-600 text-white rounded-xl font-black"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-gray-600 mb-4">Set new password for {resetModal.username}</p>
+                                <input
+                                    type="text"
+                                    value={resetPassword}
+                                    onChange={(e) => setResetPassword(e.target.value)}
+                                    placeholder="Enter new password"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4"
+                                />
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={closeResetModal}
+                                        className="flex-1 py-3 border border-gray-200 rounded-xl font-bold"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleResetPassword}
+                                        disabled={!resetPassword.trim() || resetLoading}
+                                        className="flex-1 py-3 bg-sky-600 text-white rounded-xl font-black disabled:opacity-50"
+                                    >
+                                        {resetLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Reset'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+                        <h3 className="text-lg font-black text-gray-900 mb-2">Permanently Delete Employee</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            This will permanently delete <strong>{deleteConfirm.username}</strong>. This action cannot be undone.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="flex-1 py-3 border border-gray-200 rounded-xl font-bold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeletePermanently}
+                                disabled={deleteLoading}
+                                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black disabled:opacity-50"
+                            >
+                                {deleteLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Delete Permanently'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Alerts */}
             {(error || success) && (

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -29,6 +29,20 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('pending')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get pending customers awaiting approval (SUPER_ADMIN only)' })
+  findPendingCustomers() {
+    return this.usersService.findPendingCustomers();
+  }
+
+  @Patch(':id/approve')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Approve customer (SUPER_ADMIN only)' })
+  approveCustomer(@Param('id') id: string) {
+    return this.usersService.approveCustomer(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   findOne(@Param('id') id: string) {
@@ -47,5 +61,12 @@ export class UsersController {
   @ApiOperation({ summary: 'Delete user (soft delete)' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Delete(':id/permanent')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Permanently delete employee (SUPER_ADMIN only)' })
+  deletePermanently(@Param('id') id: string, @Request() req: { user: { id: string } }) {
+    return this.usersService.deletePermanently(id, req.user.id);
   }
 }

@@ -237,6 +237,11 @@ export class CreateConsignmentDto {
   @IsString()
   documentServiceType?: string; // MOFA, Apostille, UAE Embassy, etc.
 
+  @ApiProperty({ example: 'REF-12345', description: 'Customer reference number', required: false })
+  @IsOptional()
+  @IsString()
+  dcReferenceNo?: string;
+
   @ApiProperty({ example: 'batch-uuid', required: false })
   @IsOptional()
   @IsString()

@@ -487,6 +487,7 @@ export class ConsignmentsService {
             ? new Date(createConsignmentDto.preferredDeliveryDate)
             : undefined,
           preferredDeliveryTime: createConsignmentDto.preferredDeliveryTime ?? undefined,
+          dcReferenceNo: createConsignmentDto.dcReferenceNo ?? undefined,
         },
         include: {
           customer: true,
@@ -618,7 +619,7 @@ export class ConsignmentsService {
   }
 
   /**
-   * Get consignment by CN number
+   * Get consignment by CN number (for tracking - includes manifest, deliverySheet, full history)
    */
   async findByCnNumber(cnNumber: string) {
     const booking = await this.prisma.booking.findUnique({
@@ -629,6 +630,18 @@ export class ConsignmentsService {
         destinationCity: true,
         service: true,
         product: true,
+        manifest: {
+          select: {
+            manifestCode: true,
+            manifestDate: true,
+          },
+        },
+        deliverySheet: {
+          select: {
+            sheetNumber: true,
+            sheetDate: true,
+          },
+        },
         createdByUser: {
           select: {
             id: true,
@@ -638,8 +651,25 @@ export class ConsignmentsService {
         },
         bookingHistory: {
           orderBy: {
-            createdAt: 'desc',
+            createdAt: 'asc',
           },
+          include: {
+            performedByUser: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          },
+        },
+        pickupRequests: {
+          select: {
+            riderName: true,
+            riderPhone: true,
+            status: true,
+          },
+          take: 1,
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
@@ -931,6 +961,7 @@ export class ConsignmentsService {
             ? (updateData.preferredDeliveryDate ? new Date(updateData.preferredDeliveryDate) : null)
             : undefined,
           preferredDeliveryTime: updateData.preferredDeliveryTime !== undefined ? updateData.preferredDeliveryTime : undefined,
+          dcReferenceNo: updateData.dcReferenceNo !== undefined ? (updateData.dcReferenceNo || null) : undefined,
         };
 
         const updated = await tx.booking.update({
@@ -1003,7 +1034,67 @@ export class ConsignmentsService {
   }
 
   /**
-   * Get next CN for COD in the same format as booking API: CN-YYYYMMDD-XXXXXX.
+   * Update consignment status (for shipment tracking - admin override)
+   */
+  async updateStatus(id: string, newStatus: string, remarks: string | undefined, userId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+    if (booking.status === BookingStatus.VOIDED) {
+      throw new BadRequestException('Cannot update status of voided booking');
+    }
+    const validStatuses = Object.values(BookingStatus).filter((s) => s !== BookingStatus.VOIDED) as string[];
+    if (!validStatuses.includes(newStatus)) {
+      throw new BadRequestException(`Invalid status: ${newStatus}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.booking.update({
+        where: { id },
+        data: { status: newStatus as BookingStatus },
+      });
+
+      await tx.bookingHistory.create({
+        data: {
+          bookingId: id,
+          action: 'STATUS_UPDATE',
+          oldStatus: booking.status,
+          newStatus: newStatus as BookingStatus,
+          remarks: remarks || `Status updated to ${newStatus}`,
+          performedBy: userId,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * Add remarks to consignment (for shipment tracking)
+   */
+  async addRemarks(id: string, remarks: string, userId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+
+    await this.prisma.bookingHistory.create({
+      data: {
+        bookingId: id,
+        action: 'REMARKS',
+        oldStatus: booking.status,
+        newStatus: booking.status,
+        remarks,
+        performedBy: userId,
+      },
+    });
+
+    return this.findByCnNumber(booking.cnNumber!);
+  }
+
+  /**
+   * Get next CN for COD in 10-digit format: YYYYMMDDNN (no CN prefix or dashes).
    * Reserves the CN so it is not issued to another booking until this one is created or reservation expires.
    */
   async getNextCnForCod(userId: string): Promise<{ cnNumber: string }> {
@@ -1015,8 +1106,7 @@ export class ConsignmentsService {
       const monthStr = String(month + 1).padStart(2, '0');
       const dayStr = String(day).padStart(2, '0');
       const dateStr = `${year}${monthStr}${dayStr}`;
-      const prefix = `CN-${dateStr}-`;
-      const prefixLike = `${prefix}%`;
+      const prefixLike = `${dateStr}%`;
 
       const todayStart = new Date(year, month, day, 0, 0, 0, 0);
       const todayEnd = new Date(year, month, day, 23, 59, 59, 999);
@@ -1034,7 +1124,7 @@ export class ConsignmentsService {
       const reservationsToday = Number(reservationsResult[0]?.count ?? 0);
 
       const sequence = bookingsToday + reservationsToday + 1;
-      const cnNumber = `${prefix}${String(sequence).padStart(6, '0')}`;
+      const cnNumber = `${dateStr}${String(sequence).padStart(2, '0')}`;
 
       const existsBooking = await tx.booking.findUnique({ where: { cnNumber } });
       type ExistsRow = [{ exists: boolean }];

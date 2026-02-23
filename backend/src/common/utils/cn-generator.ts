@@ -9,8 +9,8 @@ type PrismaTransactionClient = Omit<
 /**
  * Centralized CN Number Generator
  *
- * Format: CN-YYYYMMDD-XXXXXX
- * Example: CN-20251231-000245
+ * Format: 10 digits, YYYYMMDDNN (no CN prefix, no dashes)
+ * Example: 2026022301
  *
  * Rules:
  * - Auto-generated on backend only
@@ -53,12 +53,11 @@ export class CnGenerator {
           },
         });
 
-        // Generate sequence number (6 digits, zero-padded)
-        // Start from 1, so first booking of the day is 000001
-        const sequence = String(count + 1).padStart(6, '0');
+        // Generate sequence number (2 digits, zero-padded) - 10 digits total: YYYYMMDD + NN
+        const sequence = String(count + 1).padStart(2, '0');
 
-        // Construct CN number
-        const cnNumber = `CN-${dateStr}-${sequence}`;
+        // Construct CN number (10 digits, no CN prefix or dashes)
+        const cnNumber = `${dateStr}${sequence}`;
 
         // Check if this CN already exists (race condition protection)
         const exists = await prisma.booking.findUnique({
@@ -74,8 +73,8 @@ export class CnGenerator {
 
         // If too many collisions, use timestamp-based fallback
         if (attempts >= maxRetries) {
-          const timestamp = Date.now().toString().slice(-6);
-          const fallbackCn = `CN-${dateStr}-${timestamp}`;
+          const timestamp = Date.now().toString().slice(-2);
+          const fallbackCn = `${dateStr}${timestamp}`;
 
           // Final check for fallback
           const fallbackExists = await prisma.booking.findUnique({
@@ -86,11 +85,11 @@ export class CnGenerator {
             return fallbackCn;
           }
 
-          // Last resort: use random suffix
-          const randomSuffix = Math.floor(Math.random() * 1000000)
+          // Last resort: use random 2-digit suffix
+          const randomSuffix = Math.floor(Math.random() * 100)
             .toString()
-            .padStart(6, '0');
-          return `CN-${dateStr}-${randomSuffix}`;
+            .padStart(2, '0');
+          return `${dateStr}${randomSuffix}`;
         }
 
         // Wait a bit before retry to avoid race conditions

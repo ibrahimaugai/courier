@@ -172,7 +172,7 @@ export function printShiftCloseReport(bookings = [], options = {}) {
     ${signatureBlock}
     <div class="sc-footer">
       <span>Printed on: ${new Date().toLocaleString()}</span>
-      <span>Shift Close Summary - NPS Courier</span>
+      <span>Helpline: 0335-2721975 | Shift Close Summary - NPS Courier</span>
     </div>
   </div>
   <script>

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Search, Package, MapPin, Truck, CheckCircle, Clock, AlertCircle, Loader2, Calendar, ChevronDown } from 'lucide-react'
+import { Search, Package, MapPin, Truck, CheckCircle, Clock, AlertCircle, Loader2, Calendar, ChevronDown, User, Phone } from 'lucide-react'
 import { trackShipment, fetchUserCns, clearTrackingError, clearTrackingData } from '../../lib/store'
 
 export default function TrackShipment() {
@@ -127,6 +127,7 @@ export default function TrackShipment() {
   }
 
   // Transform tracking data for display
+  const latestPickup = trackingData?.pickupRequests?.[0]
   const displayData = trackingData ? {
     cnNumber: trackingData.cnNumber || '',
     origin: trackingData.originCity?.cityName || '',
@@ -134,6 +135,10 @@ export default function TrackShipment() {
     serviceType: trackingData.service?.serviceName || '',
     currentStatus: trackingData.status || 'BOOKED',
     bookingDate: trackingData.bookingDate ? new Date(trackingData.bookingDate).toISOString().split('T')[0] : '',
+    riderInfo: (trackingData.status === 'RIDER_ON_WAY' && latestPickup) ? {
+      riderName: latestPickup.riderName || '',
+      riderPhone: latestPickup.riderPhone || ''
+    } : null,
     customerInfo: {
       shipperName: trackingData.customer?.name || '',
       consigneeName: trackingData.consigneeName || '',
@@ -333,6 +338,24 @@ export default function TrackShipment() {
                 <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(displayData.currentStatus)}`}>
                   {formatStatusName(displayData.currentStatus)}
                 </span>
+                {displayData.riderInfo && (displayData.riderInfo.riderName || displayData.riderInfo.riderPhone) && (
+                  <div className="mt-3 pt-3 border-t border-teal-200 space-y-1">
+                    {displayData.riderInfo.riderName && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="w-4 h-4 text-teal-600" />
+                        <span className="font-medium text-gray-900">{displayData.riderInfo.riderName}</span>
+                      </div>
+                    )}
+                    {displayData.riderInfo.riderPhone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="w-4 h-4 text-teal-600" />
+                        <a href={`tel:${displayData.riderInfo.riderPhone}`} className="font-medium text-sky-600 hover:underline">
+                          {displayData.riderInfo.riderPhone}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-orange-50 rounded-md p-4 border border-orange-200">
@@ -405,6 +428,12 @@ export default function TrackShipment() {
                               {event.remarks && (
                                 <p className="text-gray-500 mt-1">{event.remarks}</p>
                               )}
+                              {step.status === 'RIDER_ON_WAY' && displayData?.riderInfo && (displayData.riderInfo.riderName || displayData.riderInfo.riderPhone) && (
+                                <div className="mt-2 pt-2 border-t border-gray-200 text-left space-y-0.5">
+                                  {displayData.riderInfo.riderName && <p className="font-medium text-gray-800">{displayData.riderInfo.riderName}</p>}
+                                  {displayData.riderInfo.riderPhone && <p className="text-sky-600">{displayData.riderInfo.riderPhone}</p>}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -455,6 +484,14 @@ export default function TrackShipment() {
                             <p>{new Date(event.createdAt).toLocaleDateString()} at {new Date(event.createdAt).toLocaleTimeString()}</p>
                             {event.remarks && (
                               <p className="text-gray-500 mt-1">{event.remarks}</p>
+                            )}
+                            {step.status === 'RIDER_ON_WAY' && displayData?.riderInfo && (displayData.riderInfo.riderName || displayData.riderInfo.riderPhone) && (
+                              <div className="mt-2 pt-2 border-t border-gray-200 space-y-0.5">
+                                {displayData.riderInfo.riderName && <p className="font-medium text-gray-800">{displayData.riderInfo.riderName}</p>}
+                                {displayData.riderInfo.riderPhone && (
+                                  <p><a href={`tel:${displayData.riderInfo.riderPhone}`} className="text-sky-600 hover:underline">{displayData.riderInfo.riderPhone}</a></p>
+                                )}
+                              </div>
                             )}
                           </div>
                         ) : (

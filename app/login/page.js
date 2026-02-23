@@ -20,7 +20,9 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    if (searchParams.get('registered') === 'true') {
+    if (searchParams.get('pending') === 'approval') {
+      setSuccess('Registration successful! Your account is pending approval. You will be able to sign in once an administrator approves your account.')
+    } else if (searchParams.get('registered') === 'true') {
       setSuccess('Account created successfully! Please sign in.')
     }
   }, [searchParams])
@@ -119,7 +121,7 @@ export default function LoginPage() {
           )}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600">{error} or You are not approved to access this page. Please contact the administrator.</p>
             </div>
           )}
 

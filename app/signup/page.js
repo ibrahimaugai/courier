@@ -7,8 +7,8 @@ export default function SignupPage() {
   const router = useRouter()
 
   const handleSuccess = () => {
-    // Redirect to login page after successful registration
-    router.push('/login?registered=true')
+    // Customer signups need approval - show pending message on login page
+    router.push('/login?pending=approval')
   }
 
   return (

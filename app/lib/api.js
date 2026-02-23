@@ -98,8 +98,9 @@ export const api = {
         } catch (e) { }
       }
 
-      // Handle specific status codes
-      if (response.status === 401) {
+      // Handle 401: redirect only for protected routes, NOT for login/register failures
+      const isLoginAttempt = endpoint === '/auth/login' || endpoint === '/auth/register' || endpoint === '/auth/admin/login'
+      if (response.status === 401 && !isLoginAttempt) {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('token')
           localStorage.removeItem('user')
@@ -476,6 +477,47 @@ export const api = {
   async getUsers() {
     const response = await this.request('/users', {
       method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Reset employee password (SUPER_ADMIN only). Returns the new password.
+   */
+  async resetEmployeePassword(userId, newPassword) {
+    const response = await this.request('/auth/admin/reset-employee-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId, newPassword }),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Permanently delete an employee (SUPER_ADMIN only)
+   */
+  async deleteUserPermanently(id) {
+    const response = await this.request(`/users/${id}/permanent`, {
+      method: 'DELETE',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Get pending customers awaiting approval (SUPER_ADMIN only)
+   */
+  async getPendingCustomers() {
+    const response = await this.request('/users/pending', {
+      method: 'GET',
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Approve a customer (SUPER_ADMIN only)
+   */
+  async approveCustomer(id) {
+    const response = await this.request(`/users/${id}/approve`, {
+      method: 'PATCH',
     })
     return this.handleResponse(response)
   },

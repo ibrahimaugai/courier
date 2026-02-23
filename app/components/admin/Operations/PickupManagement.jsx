@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { fetchAllPickups, updatePickupStatus, clearPickupsError, clearPickupsSuccess } from '../../../lib/store'
 import { api } from '../../../lib/api'
+import { printPickupSheet } from '../../../lib/pickupSheetPrint'
 import Toast from '../../Toast'
 
 export default function PickupManagement() {
@@ -95,65 +96,11 @@ export default function PickupManagement() {
         bookingDetail = res?.data || res
       } catch (_) {}
     }
-    const riderName = pickup.riderName || pickup.assignedRider?.name || '—'
-    const riderPhone = pickup.riderPhone || pickup.assignedRider?.phone || '—'
-    const cell = (label, value) => `<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#475569;width:180px">${label}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a">${(value || '—').toString().replace(/</g, '&lt;')}</td></tr>`
-    const section = (title) => `<tr><td colspan="2" style="padding:12px 0 6px;font-weight:800;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.05em">${title}</td></tr>`
-    const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Pickup - ${(b.cnNumber || pickup.id || 'detail').toString()}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#0f172a}
-table{width:100%;border-collapse:collapse} h1{font-size:1.25rem;margin:0 0 16px;color:#0f172a}
-</style></head>
-<body>
-<h1>Pickup / Booking Details</h1>
-<table>
-${section('')}
-${cell('CN Number', b.cnNumber)}
-${cell('Booking Status', bookingDetail?.status || b.status)}
-${cell('Pickup Request Status', pickup.status)}
-${cell('Request Created', pickup.createdAt ? new Date(pickup.createdAt).toLocaleString() : '')}
-${section('Booking')}
-${cell('Origin', bookingDetail?.originCity?.cityName || b.originCity?.cityName)}
-${cell('Destination', bookingDetail?.destinationCity?.cityName || b.destinationCity?.cityName)}
-${cell('Customer (Shipper)', bookingDetail?.customer?.name || b.customer?.name)}
-${cell('Shipper Phone', bookingDetail?.customer?.phone)}
-${cell('Consignee Name', bookingDetail?.consigneeName)}
-${cell('Consignee Phone', bookingDetail?.consigneePhone)}
-${cell('Consignee Address', bookingDetail?.consigneeAddress)}
-${cell('Pieces', bookingDetail?.pieces != null ? bookingDetail.pieces : '')}
-${cell('Weight (kg)', bookingDetail?.weight != null ? bookingDetail.weight : '')}
-${cell('Service', bookingDetail?.service?.serviceName)}
-${cell('Payment Mode', bookingDetail?.paymentMode)}
-${cell('Total Amount', bookingDetail?.totalAmount != null ? bookingDetail.totalAmount : '')}
-${cell('COD Amount', bookingDetail?.codAmount != null ? bookingDetail.codAmount : '')}
-${section('Pickup Request')}
-${cell('Pickup Date', pickup.pickupDate ? new Date(pickup.pickupDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')}
-${cell('Pickup Time', pickup.pickupTime || 'Flexible / Anytime')}
-${cell('Contact Name', pickup.contactName)}
-${cell('Contact Phone', pickup.contactPhone)}
-${cell('Pickup Address', pickup.pickupAddress)}
-${cell('Special Instructions', pickup.specialInstructions || 'None')}
-${section('Assigned Rider')}
-${cell('Rider Name', riderName)}
-${cell('Rider Phone', riderPhone)}
-${cell('Generated', new Date().toLocaleString())}
-</table>
-</body>
-</html>`
-    const win = window.open('', '_blank')
-    if (!win) {
+    const ok = printPickupSheet(pickup, bookingDetail)
+    if (!ok) {
       setToast({ isVisible: true, message: 'Allow popups to print', type: 'error' })
       return
     }
-    win.document.write(html)
-    win.document.close()
-    win.focus()
-    setTimeout(() => {
-      win.print()
-      win.close()
-    }, 300)
     setToast({ isVisible: true, message: 'Print dialog opened', type: 'success' })
   }
 
@@ -200,10 +147,7 @@ ${cell('Generated', new Date().toLocaleString())}
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium">
-              <FileSpreadsheet className="w-4 h-4" />
-              Export
-            </button>
+
           </div>
         </div>
 

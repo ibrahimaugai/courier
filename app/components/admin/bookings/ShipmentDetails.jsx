@@ -292,12 +292,66 @@ export default function ShipmentDetails({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Handling Instructions
                 </label>
+                <select
+                  name="handlingInstructions"
+                  value={formData.handlingInstructions || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors"
+                >
+                  <option value="">Select handling instructions</option>
+                  <option value="Special Handling">Special Handling</option>
+                  <option value="Fragile">Fragile</option>
+                  <option value="Original Documents">Original Documents</option>
+                  <option value="Handle with Care">Handle with Care</option>
+                </select>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Remarks
+                </label>
                 <input
                   type="text"
-                  name="handlingInstructions"
-                  value={formData.handlingInstructions}
+                  name="remarks"
+                  value={formData.remarks || ''}
                   onChange={handleInputChange}
-                  placeholder="Enter custom instructions"
+                  placeholder="Enter remarks"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors"
+                />
+              </div>
+
+              {/* COD Amount (when product is COD) */}
+              {formData.product === 'COD' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Order Amount
+                  </label>
+                  <input
+                    type="number"
+                    name="codAmount"
+                    value={formData.codAmount || ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="Amount to collect on delivery"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Order Amount will be added to the total amount</p>
+                </div>
+              )}
+
+              {/* Customer Ref # */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Ref #
+                </label>
+                <input
+                  type="text"
+                  name="customerRef"
+                  value={formData.customerRef || ''}
+                  onChange={handleInputChange}
+                  placeholder="Enter customer reference"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors"
                 />
               </div>

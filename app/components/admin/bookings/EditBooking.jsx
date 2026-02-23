@@ -25,6 +25,7 @@ export default function EditBooking() {
         cnNumber: '',
         pieces: '1',
         handlingInstructions: '',
+        remarks: '',
         packetContent: '',
         services: '',
         payMode: '',
@@ -50,8 +51,10 @@ export default function EditBooking() {
         consigneeZipCode: '',
         // Pricing
         otherAmount: '',
+        codAmount: '',
         rate: '',
         totalAmount: 0,
+        customerRef: '',
     })
 
     const { rules: reduxRules, cities, services } = useSelector((state) => state.pricing)
@@ -77,7 +80,14 @@ export default function EditBooking() {
                     originCity: data.originCityId || '',
                     cnNumber: data.cnNumber || '',
                     pieces: data.pieces?.toString() || '1',
-                    handlingInstructions: data.handlingInstructions || '',
+                    handlingInstructions: (() => {
+                      const raw = data.handlingInstructions || ''
+                      return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[0] || '').trim() : raw
+                    })(),
+                    remarks: (() => {
+                      const raw = data.handlingInstructions || ''
+                      return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[1] || '').trim() : ''
+                    })(),
                     packetContent: data.packetContent || '',
                     services: data.service?.serviceName || data.serviceId || '',
                     payMode: data.paymentMode === 'CASH' ? 'Cash' : 'Online',
@@ -103,8 +113,10 @@ export default function EditBooking() {
                     consigneeZipCode: data.consigneeZipCode || '',
                     // Pricing
                     otherAmount: data.otherAmount?.toString() || '',
+                    codAmount: data.codAmount?.toString() || '',
                     rate: data.rate?.toString() || '0',
                     totalAmount: parseFloat(data.totalAmount || 0),
+                    customerRef: data.dcReferenceNo || '',
                 })
             } else {
                 setError('No booking found with this CN Number.')
@@ -154,7 +166,9 @@ export default function EditBooking() {
         const calculatedRate = calculateRate()
         const pieces = parseInt(formData.pieces || '1')
         const otherAmount = parseFloat(formData.otherAmount || '0')
-        const totalAmount = (calculatedRate * pieces) + otherAmount
+        const codAmt = parseFloat(formData.codAmount || '0') || 0
+        const shippingCharges = (calculatedRate * pieces) + otherAmount
+        const totalAmount = formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges
 
         setFormData(prev => ({
             ...prev,
@@ -165,10 +179,12 @@ export default function EditBooking() {
         formData.originCity,
         formData.destination,
         formData.services,
+        formData.product,
         formData.weight,
         formData.volumetricWeight,
         formData.pieces,
         formData.otherAmount,
+        formData.codAmount,
         reduxRules,
         bookingId
     ])
@@ -185,7 +201,11 @@ export default function EditBooking() {
                 destinationCityId: formData.destination,
                 originCityId: formData.originCity,
                 pieces: parseInt(formData.pieces || '1'),
-                handlingInstructions: formData.handlingInstructions,
+                handlingInstructions: (formData.handlingInstructions || formData.remarks)
+                    ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+                    : undefined,
+                codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
+                dcReferenceNo: formData.customerRef || undefined,
                 packetContent: formData.packetContent,
                 paymentMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE',
                 volumetricWeight: parseFloat(formData.volumetricWeight || '0'),

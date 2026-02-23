@@ -55,6 +55,7 @@ export default function BookingConsignment() {
     cnNumber: '',
     pieces: '1',
     handlingInstructions: '',
+    remarks: '',
     packetContent: '',
     services: '',
     payMode: '',
@@ -80,8 +81,10 @@ export default function BookingConsignment() {
     consigneeZipCode: '',
     // Other Amount
     otherAmount: '',
+    codAmount: '',
     rate: '',
     totalAmount: 0,
+    customerRef: '',
     batchId: '',
     batchCode: '',
     preferredDeliveryDate: '',
@@ -291,7 +294,9 @@ export default function BookingConsignment() {
 
     if (hasRequiredFields && rate > 0) {
       finalRate = rate
-      totalAmount = (rate * pcs) + docTotal + other + subservices
+      const shippingCharges = (rate * pcs) + docTotal + other + subservices
+      const codAmt = parseFloat(formData.codAmount || '0') || 0
+      totalAmount = formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges
     } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services)) {
       // For Attestation services (shown under General), calculate total even without rate/weight/origin/destination
       if (formData.services) {
@@ -313,6 +318,7 @@ export default function BookingConsignment() {
     formData.volumetricWeight,
     formData.pieces,
     formData.otherAmount,
+    formData.codAmount,
     reduxRules,
     selectedDocuments,
     selectedApostilleDocuments,
@@ -831,7 +837,9 @@ export default function BookingConsignment() {
 
         // Shipment Details
         pieces: parseInt(formData.pieces || '1'),
-        handlingInstructions: formData.handlingInstructions || undefined,
+        handlingInstructions: (formData.handlingInstructions || formData.remarks)
+          ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+          : undefined,
         packetContent: formData.packetContent,
         payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
         preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
@@ -864,7 +872,8 @@ export default function BookingConsignment() {
         rate: baseRate,
         otherAmount: otherAmount || undefined,
         totalAmount: totalAmount,
-        codAmount: formData.payMode === 'COD' ? totalAmount : undefined,
+        codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
+        dcReferenceNo: formData.customerRef || undefined,
 
         // Documents
         documents: documents.length > 0 ? documents : undefined,
@@ -914,6 +923,7 @@ export default function BookingConsignment() {
           cnNumber: '',
           pieces: '1',
           handlingInstructions: '',
+          remarks: '',
           packetContent: '',
           services: '',
           payMode: '',
@@ -936,8 +946,10 @@ export default function BookingConsignment() {
           consigneeEmailAddress: '',
           consigneeZipCode: '',
           otherAmount: '',
+          codAmount: '',
           rate: '',
           totalAmount: 0,
+          customerRef: '',
           preferredDeliveryDate: '',
           preferredDeliveryTime: '',
         })
@@ -1043,7 +1055,13 @@ export default function BookingConsignment() {
             payMode: formData.payMode,
             preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
             preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
-            codAmount: formData.payMode === 'COD' ? formData.totalAmount : undefined,
+            codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
+            customerRef: formData.customerRef || '',
+            dcReferenceNo: formData.customerRef || undefined,
+            handlingInstructions: (formData.handlingInstructions || formData.remarks)
+              ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+              : '',
+            remarks: formData.remarks || '',
           }
           let config = {}
           try {

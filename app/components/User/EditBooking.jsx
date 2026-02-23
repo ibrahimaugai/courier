@@ -23,6 +23,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
     cnNumber: '',
     pieces: '1',
     handlingInstructions: '',
+    remarks: '',
     packetContent: '',
     services: '',
     payMode: '',
@@ -48,7 +49,9 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
     consigneeZipCode: '',
     // Other Amount
     otherAmount: '',
+    codAmount: '',
     totalAmount: 0,
+    customerRef: '',
     originCity: '',
   })
 
@@ -115,7 +118,22 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
         destination: formatCity(booking.destinationCity) || booking.destinationCityId || '',
         cnNumber: booking.cnNumber || '',
         pieces: booking.pieces?.toString() || '1',
-        handlingInstructions: booking.handlingInstructions || '',
+        handlingInstructions: (() => {
+          const raw = booking.handlingInstructions || ''
+          if (raw.includes('%%%REMARKS%%%')) {
+            const [h] = raw.split('%%%REMARKS%%%')
+            return (h || '').trim()
+          }
+          return raw
+        })(),
+        remarks: (() => {
+          const raw = booking.handlingInstructions || ''
+          if (raw.includes('%%%REMARKS%%%')) {
+            const [, r] = raw.split('%%%REMARKS%%%')
+            return (r || '').trim()
+          }
+          return ''
+        })(),
         packetContent: booking.packetContent || '',
         services: formatDropdownValue(booking.service, 'serviceId', 'serviceCode', 'serviceName'),
         payMode: (booking.paymentMode || booking.payMode) === 'ONLINE' ? 'Online' : 'Cash',
@@ -127,6 +145,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
         otherAmount: booking.otherAmount?.toString() || '0',
         totalAmount: parseFloat(booking.totalAmount?.toString() || '0'),
         codAmount: booking.codAmount?.toString() || '0',
+        customerRef: booking.dcReferenceNo || '',
         declaredValue: booking.declaredValue?.toString() || '0',
 
         // Shipper fields
@@ -202,7 +221,9 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
         destinationCityId: formData.destination || null,
         originCityId: formData.originCity || null,
         pieces: parseInt(formData.pieces || '1'),
-        handlingInstructions: formData.handlingInstructions || null,
+        handlingInstructions: (formData.handlingInstructions || formData.remarks)
+          ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+          : null,
         packetContent: formData.packetContent || '',
         payMode: formData.payMode === 'Online' ? 'ONLINE' : 'CASH',
         weight: parseFloat(formData.weight || '0'),
@@ -213,6 +234,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
         otherAmount: parseFloat(formData.otherAmount || '0'),
         totalAmount: parseFloat(formData.totalAmount || '0'),
         codAmount: parseFloat(formData.codAmount || '0'),
+        dcReferenceNo: formData.customerRef || null,
         declaredValue: parseFloat(formData.declaredValue || '0'),
 
         // Shipper Info

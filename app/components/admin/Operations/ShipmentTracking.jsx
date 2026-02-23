@@ -1,7 +1,128 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useSelector } from 'react-redux'
 import { Search, Package, MapPin, Truck, CheckCircle, Clock, AlertCircle, Loader2, Edit, Save, X, FileText, Calendar, User, Phone, DollarSign, MessageSquare } from 'lucide-react'
+import { api } from '../../../lib/api'
+
+/** Map backend Booking + bookingHistory to ShipmentTracking UI format */
+function transformBookingToTrackingData(booking) {
+  const b = booking || {}
+  const origin = b.originCity?.cityName || b.originCity?.name || '—'
+  const dest = b.destinationCity?.cityName || b.destinationCity?.name || '—'
+  const serviceName = b.service?.serviceName || b.service?.name || '—'
+  const statusToDisplay = {
+    PENDING: 'Pending',
+    BOOKED: 'Booked',
+    PICKUP_REQUESTED: 'Pickup Requested',
+    RIDER_ON_WAY: 'Picked',
+    AT_HUB: 'Arrival Scan',
+    IN_TRANSIT: 'In Transit',
+    AT_DEPOT: 'At Depot',
+    OUT_FOR_DELIVERY: 'Out for Delivery',
+    DELIVERED: 'Delivered',
+    RETURNED: 'Returned',
+    VOIDED: 'Voided'
+  }
+  const currentStatus = statusToDisplay[b.status] || b.status || '—'
+
+  const statusToStepKey = {
+    BOOKED: 'booked',
+    PICKUP_REQUESTED: 'pickupRequested',
+    RIDER_ON_WAY: 'picked',
+    AT_HUB: 'arrivalScan',
+    IN_TRANSIT: 'inTransit',
+    OUT_FOR_DELIVERY: 'outForDelivery',
+    DELIVERED: 'delivered'
+  }
+
+  const timeline = {
+    booked: null,
+    pickupRequested: null,
+    picked: null,
+    arrivalScan: null,
+    manifested: null,
+    inTransit: null,
+    outForDelivery: null,
+    delivered: null
+  }
+
+  const history = Array.isArray(b.bookingHistory) ? b.bookingHistory : []
+  for (const h of history) {
+    const stepKey = statusToStepKey[h.newStatus]
+    const d = h.createdAt ? new Date(h.createdAt) : new Date()
+    const stepEntry = {
+      date: d.toISOString().split('T')[0],
+      time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      location: origin,
+      updatedBy: h.performedByUser?.username || 'System'
+    }
+    if (stepKey) {
+      if (!timeline[stepKey]) timeline[stepKey] = stepEntry
+    }
+    if (h.newStatus === 'AT_HUB') {
+      if (!timeline.manifested) timeline.manifested = stepEntry
+    } else if (h.newStatus === 'IN_TRANSIT' && !timeline.manifested) {
+      timeline.manifested = stepEntry
+    }
+  }
+
+  const linkedDocuments = []
+  if (b.manifest?.manifestCode) {
+    linkedDocuments.push({
+      type: 'Manifest',
+      id: b.manifest.manifestCode,
+      date: b.manifest.manifestDate ? new Date(b.manifest.manifestDate).toLocaleDateString() : ''
+    })
+  }
+  if (b.deliverySheet?.sheetNumber) {
+    linkedDocuments.push({
+      type: 'Delivery Sheet',
+      id: b.deliverySheet.sheetNumber,
+      date: b.deliverySheet.sheetDate ? new Date(b.deliverySheet.sheetDate).toLocaleDateString() : ''
+    })
+  }
+
+  const remarksFromHistory = history
+    .filter(h => h.remarks)
+    .map(h => ({
+      date: h.createdAt ? new Date(h.createdAt).toISOString().split('T')[0] : '',
+      time: h.createdAt ? new Date(h.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
+      user: h.performedByUser?.username || 'System',
+      note: h.remarks
+    }))
+    .reverse()
+
+  const bookingDate = b.bookingDate ? new Date(b.bookingDate) : null
+  const totalAmt = b.totalAmount != null ? Number(b.totalAmount) : (b.codAmount != null ? Number(b.codAmount) : null)
+  const weightVal = b.weight != null ? (typeof b.weight === 'object' ? parseFloat(b.weight.toString()) : parseFloat(b.weight)) : null
+
+  return {
+    bookingId: b.id,
+    cnNumber: b.cnNumber || '—',
+    origin,
+    destination: dest,
+    serviceType: serviceName,
+    currentStatus,
+    bookingDate: bookingDate ? bookingDate.toISOString().split('T')[0] : '',
+    timeline,
+    customerInfo: {
+      shipperName: b.shipperName || b.customer?.name || '—',
+      shipperPhone: b.shipperPhone || b.customer?.phone || '—',
+      shipperAddress: b.shipperAddress || b.customer?.address || '—',
+      consigneeName: b.consigneeName || '—',
+      consigneePhone: b.consigneePhone || '—',
+      consigneeAddress: b.consigneeAddress || '—'
+    },
+    paymentType: b.paymentMode || '—',
+    paymentAmount: totalAmt,
+    estimatedDelivery: b.preferredDeliveryDate ? new Date(b.preferredDeliveryDate).toISOString().split('T')[0] : null,
+    weight: weightVal != null ? `${weightVal} kg` : '—',
+    pieces: b.pieces ?? '—',
+    remarks: remarksFromHistory,
+    linkedDocuments
+  }
+}
 
 export default function ShipmentTracking() {
   const [cnNumber, setCnNumber] = useState('')
@@ -13,7 +134,7 @@ export default function ShipmentTracking() {
   const [remarks, setRemarks] = useState('')
   const [showRemarksModal, setShowRemarksModal] = useState(false)
 
-  const timelineSteps = [
+  const allTimelineSteps = [
     { id: 1, name: 'Booked', key: 'booked' },
     { id: 2, name: 'Pickup Requested', key: 'pickupRequested' },
     { id: 3, name: 'Picked', key: 'picked' },
@@ -23,6 +144,26 @@ export default function ShipmentTracking() {
     { id: 7, name: 'Out for Delivery', key: 'outForDelivery' },
     { id: 8, name: 'Delivered', key: 'delivered' }
   ]
+
+  const { user: reduxUser } = useSelector((state) => state.auth || {})
+  const currentUser = useMemo(() => {
+    if (reduxUser?.role) return reduxUser
+    try {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+      return stored ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
+  }, [reduxUser])
+
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
+
+  const timelineSteps = useMemo(() => {
+    if (isAdmin) {
+      return allTimelineSteps.filter(s => s.key !== 'pickupRequested' && s.key !== 'picked')
+    }
+    return allTimelineSteps
+  }, [isAdmin])
 
   const handleTrack = async (e) => {
     e?.preventDefault()
@@ -35,62 +176,36 @@ export default function ShipmentTracking() {
     try {
       setLoading(true)
       setError('')
+      setTrackingData(null)
 
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/admin/track/${cnNumber}`)
-      // const data = await response.json()
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1200))
-
-      // Mock tracking data with admin view
-      const mockData = {
-        cnNumber: cnNumber.toUpperCase(),
-        origin: 'Lahore',
-        destination: 'Karachi',
-        serviceType: 'Express',
-        currentStatus: 'In Transit',
-        bookingDate: '2024-01-15',
-        timeline: {
-          booked: { date: '2024-01-15', time: '10:30 AM', location: 'Lahore', updatedBy: 'Admin-001' },
-          pickupRequested: { date: '2024-01-15', time: '02:15 PM', location: 'Lahore', updatedBy: 'User' },
-          picked: { date: '2024-01-16', time: '11:00 AM', location: 'Lahore', updatedBy: 'Rider-001' },
-          arrivalScan: { date: '2024-01-16', time: '03:45 PM', location: 'Lahore Hub', updatedBy: 'Admin-002' },
-          manifested: { date: '2024-01-17', time: '09:00 AM', location: 'Lahore Hub', updatedBy: 'Admin-001' },
-          inTransit: { date: '2024-01-17', time: '12:00 PM', location: 'En Route', updatedBy: 'System' },
-          outForDelivery: null,
-          delivered: null
-        },
-        customerInfo: {
-          shipperName: 'John Doe',
-          shipperPhone: '03001234567',
-          shipperAddress: '123 Main Street, Lahore',
-          consigneeName: 'Jane Smith',
-          consigneePhone: '03001234568',
-          consigneeAddress: '456 Park Avenue, Karachi'
-        },
-        paymentType: 'COD',
-        paymentAmount: 5000,
-        estimatedDelivery: '2024-01-18',
-        weight: '2.5 kg',
-        pieces: 1,
-        remarks: [
-          { date: '2024-01-17', time: '12:00 PM', user: 'Admin-001', note: 'Shipment dispatched to transit hub' }
-        ],
-        linkedDocuments: [
-          { type: 'Manifest', id: 'MNF-2024-001', date: '2024-01-17' },
-          { type: 'Delivery Sheet', id: 'DS-2024-001', date: '2024-01-18' }
-        ]
+      const result = await api.trackBooking(cnNumber.trim())
+      const booking = result?.data || result
+      if (!booking || !booking.cnNumber) {
+        setError('Consignment not found. Please check the CN number and try again.')
+        return
       }
 
-      setTrackingData(mockData)
-    } catch (error) {
-      console.error('Error tracking shipment:', error)
-      setError('Failed to track shipment. Please check CN number and try again.')
+      const transformed = transformBookingToTrackingData(booking)
+      setTrackingData(transformed)
+    } catch (err) {
+      console.error('Error tracking shipment:', err)
+      const msg = err?.message || err?.response?.data?.message
+      setError(msg || 'Failed to track shipment. Please check CN number and try again.')
       setTrackingData(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  const displayToApiStatus = {
+    'Booked': 'BOOKED',
+    'Pickup Requested': 'PICKUP_REQUESTED',
+    'Picked': 'RIDER_ON_WAY',
+    'Arrival Scan': 'AT_HUB',
+    'Manifested': 'AT_HUB',
+    'In Transit': 'IN_TRANSIT',
+    'Out for Delivery': 'OUT_FOR_DELIVERY',
+    'Delivered': 'DELIVERED'
   }
 
   const handleUpdateStatus = async (stepKey) => {
@@ -99,36 +214,30 @@ export default function ShipmentTracking() {
       return
     }
 
+    const apiStatus = displayToApiStatus[newStatus]
+    if (!apiStatus) {
+      setError('Invalid status selected')
+      return
+    }
+
+    if (!trackingData?.bookingId) {
+      setError('Cannot update status: booking ID missing')
+      return
+    }
+
     try {
-      // TODO: API call to update status
-      // const response = await fetch(`/api/admin/shipments/${trackingData.cnNumber}/status`, {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ status: newStatus, stepKey })
-      // })
-
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      // Update local state
-      setTrackingData(prev => ({
-        ...prev,
-        currentStatus: newStatus,
-        timeline: {
-          ...prev.timeline,
-          [stepKey]: {
-            date: new Date().toISOString().split('T')[0],
-            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            location: 'Updated by Admin',
-            updatedBy: 'Admin-001'
-          }
-        }
-      }))
-
+      setError('')
+      await api.updateConsignmentStatus(trackingData.bookingId, apiStatus)
+      const result = await api.trackBooking(trackingData.cnNumber)
+      const booking = result?.data || result
+      if (booking?.cnNumber) {
+        setTrackingData(transformBookingToTrackingData(booking))
+      }
       setEditingStatus(null)
       setNewStatus('')
-    } catch (error) {
-      console.error('Error updating status:', error)
-      setError('Failed to update status')
+    } catch (err) {
+      console.error('Error updating status:', err)
+      setError(err?.message || 'Failed to update status')
     }
   }
 
@@ -138,43 +247,49 @@ export default function ShipmentTracking() {
       return
     }
 
+    if (!trackingData?.bookingId) {
+      setError('Cannot add remarks: booking ID missing')
+      return
+    }
+
     try {
-      // TODO: API call to add remarks
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      const newRemark = {
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        user: 'Admin-001',
-        note: remarks
+      setError('')
+      const booking = await api.addConsignmentRemarks(trackingData.bookingId, remarks.trim())
+      if (booking?.cnNumber) {
+        setTrackingData(transformBookingToTrackingData(booking))
       }
-
-      setTrackingData(prev => ({
-        ...prev,
-        remarks: [...(prev.remarks || []), newRemark]
-      }))
-
       setRemarks('')
       setShowRemarksModal(false)
-    } catch (error) {
-      console.error('Error adding remarks:', error)
-      setError('Failed to add remarks')
+    } catch (err) {
+      console.error('Error adding remarks:', err)
+      setError(err?.message || 'Failed to add remarks')
     }
   }
 
   const getCurrentStepIndex = () => {
     if (!trackingData) return -1
     const currentStatus = trackingData.currentStatus
-    const statusMap = {
-      'Booked': 0,
-      'Pickup Requested': 1,
-      'Picked': 2,
-      'Arrival Scan': 3,
-      'Manifested': 4,
-      'In Transit': 5,
-      'Out for Delivery': 6,
-      'Delivered': 7
-    }
+    const statusMap = isAdmin
+      ? {
+          'Booked': 0,
+          'Pickup Requested': 1,
+          'Picked': 1,
+          'Arrival Scan': 1,
+          'Manifested': 2,
+          'In Transit': 3,
+          'Out for Delivery': 4,
+          'Delivered': 5
+        }
+      : {
+          'Booked': 0,
+          'Pickup Requested': 1,
+          'Picked': 2,
+          'Arrival Scan': 3,
+          'Manifested': 4,
+          'In Transit': 5,
+          'Out for Delivery': 6,
+          'Delivered': 7
+        }
     return statusMap[currentStatus] ?? -1
   }
 
@@ -361,13 +476,6 @@ export default function ShipmentTracking() {
           <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-800">Shipment Timeline</h2>
-              <button
-                onClick={() => setShowRemarksModal(true)}
-                className="px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition-colors font-medium flex items-center gap-2 text-sm"
-              >
-                <MessageSquare className="w-4 h-4" />
-                Add Remarks
-              </button>
             </div>
 
             {/* Desktop Timeline */}
@@ -402,7 +510,7 @@ export default function ShipmentTracking() {
                           ) : (
                             <Clock className="w-6 h-6" />
                           )}
-                          {editingStatus === step.key && (
+                          {!isAdmin && editingStatus === step.key && (
                             <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full border-2 border-white"></div>
                           )}
                         </div>
@@ -424,7 +532,7 @@ export default function ShipmentTracking() {
                           ) : (
                             <p className="mt-1 text-xs text-gray-400">Pending</p>
                           )}
-                          {editingStatus === step.key ? (
+                          {!isAdmin && (editingStatus === step.key ? (
                             <div className="mt-2 space-y-2">
                               <select
                                 value={newStatus}
@@ -464,7 +572,7 @@ export default function ShipmentTracking() {
                                 Edit
                               </button>
                             )
-                          )}
+                          ))}
                         </div>
                       </div>
                     )
@@ -519,7 +627,7 @@ export default function ShipmentTracking() {
                         ) : (
                           <p className="mt-1 text-xs text-gray-400">Pending</p>
                         )}
-                        {editingStatus === step.key && (
+                        {!isAdmin && editingStatus === step.key && (
                           <div className="mt-2 space-y-2">
                             <select
                               value={newStatus}
@@ -550,7 +658,7 @@ export default function ShipmentTracking() {
                             </div>
                           </div>
                         )}
-                        {editingStatus !== step.key && index <= getCurrentStepIndex() && (
+                        {!isAdmin && editingStatus !== step.key && index <= getCurrentStepIndex() && (
                           <button
                             onClick={() => setEditingStatus(step.key)}
                             className="mt-1 px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded"

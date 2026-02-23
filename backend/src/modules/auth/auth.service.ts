@@ -161,7 +161,7 @@ export class AuthService {
           passwordHash: hashedPassword,
           role: 'USER', // Force USER role for public signup
           staffCode: registerDto.staffCode,
-          isActive: true, // Ensure user is active
+          isActive: false, // Require SUPER_ADMIN approval before customer can login
         },
       });
 
@@ -220,5 +220,26 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid token');
     }
+  }
+
+  /**
+   * Reset employee password (SUPER_ADMIN only). Returns the new password so SUPER_ADMIN can share it.
+   */
+  async resetEmployeePassword(userId: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new ConflictException('User not found');
+    }
+    if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+      throw new ConflictException('Can only reset password for admin employees');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashedPassword },
+    });
+
+    return { password: newPassword, username: user.username };
   }
 }
