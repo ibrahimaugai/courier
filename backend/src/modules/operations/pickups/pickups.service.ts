@@ -81,6 +81,86 @@ export class PickupsService {
         }
     }
 
+    /**
+     * Create pickup requests for all eligible bookings in a batch (same details for all).
+     */
+    async createBatchPickup(
+        batchId: string,
+        details: {
+            pickupAddress: string;
+            pickupDate: string;
+            pickupTime?: string;
+            contactName: string;
+            contactPhone: string;
+            specialInstructions?: string;
+        },
+        userId: string,
+    ) {
+        const batch = await this.prisma.batch.findUnique({ where: { id: batchId } });
+        if (!batch) {
+            throw new NotFoundException('Batch not found');
+        }
+
+        const eligibleBookings = await this.prisma.booking.findMany({
+            where: {
+                batchId,
+                createdBy: userId,
+                status: 'BOOKED',
+                pickupRequests: {
+                    none: { status: { not: PickupStatus.CANCELLED } },
+                },
+            },
+        });
+
+        if (eligibleBookings.length === 0) {
+            throw new BadRequestException(
+                'No eligible shipments in this batch for pickup. All may already have a pickup request or are not in BOOKED status.',
+            );
+        }
+
+        const pickupDate = new Date(details.pickupDate);
+        const created: string[] = [];
+
+        await this.prisma.$transaction(async (tx) => {
+            for (const booking of eligibleBookings) {
+                const pickup = await tx.pickupRequest.create({
+                    data: {
+                        pickupAddress: details.pickupAddress,
+                        pickupDate,
+                        pickupTime: details.pickupTime ?? null,
+                        contactName: details.contactName,
+                        contactPhone: details.contactPhone,
+                        specialInstructions: details.specialInstructions ?? null,
+                        booking: { connect: { id: booking.id } },
+                        createdByUser: { connect: { id: userId } },
+                    },
+                });
+                created.push(pickup.id);
+                await tx.booking.update({
+                    where: { id: booking.id },
+                    data: { status: 'PICKUP_REQUESTED' as any },
+                });
+                await tx.bookingHistory.create({
+                    data: {
+                        bookingId: booking.id,
+                        action: 'PICKUP_REQUESTED',
+                        oldStatus: booking.status,
+                        newStatus: 'PICKUP_REQUESTED' as any,
+                        performedBy: userId,
+                        remarks: 'Pickup request created (batch)',
+                    },
+                });
+            }
+        });
+
+        this.logger.log(`Batch pickup: ${created.length} pickups created for batch ${batch.batchCode}`);
+        return {
+            created: created.length,
+            batchCode: batch.batchCode,
+            bookingIds: eligibleBookings.map((b) => b.id),
+        };
+    }
+
     async findAll(filters: any) {
         const { status, cityId, startDate, endDate, searchTerm } = filters;
         const where: any = {};
@@ -91,8 +171,8 @@ export class PickupsService {
         }
         if (startDate || endDate) {
             where.pickupDate = {};
-            if (startDate) where.pickupDate.gte = new Date(startDate);
-            if (endDate) where.pickupDate.lte = new Date(endDate);
+            if (startDate) where.pickupDate.gte = new Date(startDate + 'T00:00:00.000Z');
+            if (endDate) where.pickupDate.lte = new Date(endDate + 'T23:59:59.999Z');
         }
         if (searchTerm) {
             where.OR = [
@@ -107,10 +187,35 @@ export class PickupsService {
             include: {
                 booking: {
                     select: {
+                        id: true,
                         cnNumber: true,
-                        customer: { select: { name: true } },
+                        batchId: true,
+                        batch: { select: { id: true, batchCode: true, status: true } },
+                        customer: { select: { name: true, phone: true, address: true, email: true } },
                         originCity: { select: { cityName: true } },
                         destinationCity: { select: { cityName: true } },
+                        service: { select: { serviceName: true, serviceCode: true, serviceType: true } },
+                        product: { select: { productName: true, productCode: true } },
+                        weight: true,
+                        pieces: true,
+                        chargeableWeight: true,
+                        rate: true,
+                        totalAmount: true,
+                        codAmount: true,
+                        otherAmount: true,
+                        paymentMode: true,
+                        consigneeName: true,
+                        consigneePhone: true,
+                        consigneeAddress: true,
+                        consigneeEmail: true,
+                        consigneeCompanyName: true,
+                        shipperName: true,
+                        shipperPhone: true,
+                        shipperAddress: true,
+                        shipperEmail: true,
+                        shipperCompanyName: true,
+                        packetContent: true,
+                        handlingInstructions: true,
                     }
                 },
                 assignedRider: true,
@@ -127,9 +232,34 @@ export class PickupsService {
                 include: {
                     booking: {
                         select: {
+                            id: true,
                             cnNumber: true,
+                            batchId: true,
+                            batch: { select: { id: true, batchCode: true, status: true } },
+                            customer: { select: { name: true, phone: true, address: true, email: true } },
                             originCity: { select: { cityName: true } },
                             destinationCity: { select: { cityName: true } },
+                            service: { select: { serviceName: true, serviceCode: true, serviceType: true } },
+                            product: { select: { productName: true, productCode: true } },
+                            weight: true,
+                            pieces: true,
+                            chargeableWeight: true,
+                            rate: true,
+                            totalAmount: true,
+                            codAmount: true,
+                            otherAmount: true,
+                            paymentMode: true,
+                            consigneeName: true,
+                            consigneePhone: true,
+                            consigneeAddress: true,
+                            consigneeEmail: true,
+                            shipperName: true,
+                            shipperPhone: true,
+                            shipperAddress: true,
+                            shipperEmail: true,
+                            shipperCompanyName: true,
+                            packetContent: true,
+                            handlingInstructions: true,
                         }
                     },
                     assignedRider: true,
@@ -142,10 +272,44 @@ export class PickupsService {
         }
     }
 
+    /**
+     * Batches that have at least one eligible booking (BOOKED, no active pickup) for the user.
+     */
+    async findEligibleBatches(userId: string) {
+        const eligibleBookings = await this.prisma.booking.findMany({
+            where: {
+                createdBy: userId,
+                status: 'BOOKED',
+                batchId: { not: null },
+                pickupRequests: {
+                    none: { status: { not: PickupStatus.CANCELLED } },
+                },
+            },
+            select: {
+                batchId: true,
+                batch: { select: { id: true, batchCode: true, status: true } },
+            },
+        });
+        const byBatch = new Map<string, { batchCode: string; count: number }>();
+        for (const b of eligibleBookings) {
+            if (!b.batchId || !b.batch) continue;
+            const existing = byBatch.get(b.batchId);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                byBatch.set(b.batchId, { batchCode: b.batch.batchCode, count: 1 });
+            }
+        }
+        return Array.from(byBatch.entries()).map(([batchId, { batchCode, count }]) => ({
+            batchId,
+            batchCode,
+            eligibleCount: count,
+        }));
+    }
+
     async findEligibleBookings(userId: string) {
         try {
             this.logger.log(`Fetching eligible bookings for user: ${userId}`);
-            // Bookings that are BOOKED and don't have an active pickup request
             const bookings = await this.prisma.booking.findMany({
                 where: {
                     createdBy: userId,
@@ -215,6 +379,20 @@ export class PickupsService {
                 assignedRider: true,
             }
         });
+    }
+
+    async assignRiderBulk(pickupIds: string[], riderName: string, riderPhone: string, userId?: string) {
+        if (!pickupIds?.length) return [];
+        const results: any[] = [];
+        for (const id of pickupIds) {
+            try {
+                const updated = await this.updateStatus(id, 'ASSIGNED', undefined, riderName, riderPhone, userId);
+                results.push(updated);
+            } catch (err) {
+                this.logger.warn(`assignRiderBulk: failed for pickup ${id}: ${err?.message}`);
+            }
+        }
+        return results;
     }
 
     async cancel(id: string, userId: string, role: string) {

@@ -72,9 +72,9 @@ export function printBookingSlip(booking, options = {}) {
   const helpline = options.helpline ?? '0335-2721975'
   const website = options.website ?? 'NPS.com.pk'
 
-  // Origin/Dest codes (e.g. JHN-LHE)
-  const originCode = b.originCity?.cityCode || b.originCity?.code || (typeof origin === 'string' ? origin.substring(0, 3).toUpperCase() : '—')
-  const destCode = b.destinationCity?.cityCode || b.destinationCity?.code || (typeof destination === 'string' ? destination.substring(0, 3).toUpperCase() : '—')
+  // Origin/Dest codes from frontend/API (e.g. LHE-SLT). Use cityCode only; no guess from city name.
+  const originCode = (b.originCity?.cityCode || b.originCity?.code || '').toString().trim().toUpperCase() || '—'
+  const destCode = (b.destinationCity?.cityCode || b.destinationCity?.code || '').toString().trim().toUpperCase() || '—'
   const orgDest = `${originCode}-${destCode}`
 
   // Payment Details breakdown
@@ -92,6 +92,13 @@ export function printBookingSlip(booking, options = {}) {
 
   const totalNum = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0))
 
+  // GST 16% and Fuel Surcharge 15% on service charges; TOTAL = Service Charges + GST + Fuel
+  const GST_RATE = 0.16
+  const FUEL_RATE = 0.15
+  const gstAmount = totalNum * GST_RATE
+  const fuelSurchargeAmount = totalNum * FUEL_RATE
+  const paymentTotal = totalNum + gstAmount + fuelSurchargeAmount
+
   // Handling instructions and Remarks: support %%%REMARKS%%% in handlingInstructions, or separate fields
   const handlingRaw = b.handlingInstructions || ''
   let instructions = '—'
@@ -107,8 +114,6 @@ export function printBookingSlip(booking, options = {}) {
     instructions = (b.instructions || '').trim() || '—'
     remarks = (b.remarks || '').trim() || '—'
   }
-  const insuredValue = b.declaredValue != null ? formatDecimal(b.declaredValue) : '0'
-  const customerRef = b.customerRef || b.dcReferenceNo || '—'
   const shipperCnic = b.shipperCnic || b.customer?.cnic || b.cnic || '—'
   const creditCardAuthId = b.creditCardAuthId || b.creditCardAuth || '—'
 
@@ -152,7 +157,8 @@ export function printBookingSlip(booking, options = {}) {
       </table>
 
       <div class="section">
-        <div class="kv-row" style="margin-bottom:4px"><span class="kv-label">Origin:</span> ${escapeHtml(origin)} | <span class="kv-label">Destination:</span> ${escapeHtml(destination)} </div>
+        <div class="section-title">Packet Content</div>
+        <div class="remarks-box">${escapeHtml(content)}</div>
       </div>
 
       <div class="section shipper-consignee-row">
@@ -170,28 +176,30 @@ export function printBookingSlip(booking, options = {}) {
         </div>
       </div>
 
-      <div class="section">
+      ${(Array.isArray(b.subserviceNames) && b.subserviceNames.length > 0)
+        ? `<div class="section">
         <div class="section-title">Item Details</div>
         <table class="doc-table">
-          <tr><th>Description</th><th>Qty</th><th>Amount</th></tr>
-          <tr><td>${escapeHtml(content)}</td><td>${escapeHtml(pieces)}</td><td>${escapeHtml(amountStr)}</td></tr>
+          <tr><th>Description</th><th>Qty</th></tr>
+          <tr><td>${escapeHtml(b.subserviceNames.join(', '))}</td><td>${escapeHtml(pieces)}</td></tr>
         </table>
-      </div>
+      </div>`
+        : ''}
 
       <div class="section">
-        <div class="kv-row"><span class="kv-label">Insured Value:</span> Rs. ${escapeHtml(insuredValue)}</div>
-        <div class="kv-row"><span class="kv-label">Customer Ref #:</span> ${escapeHtml(customerRef)}</div>
         <div class="kv-row"><span class="kv-label">Express Center Cut Of Time:</span> ${cutOffTimeStr ? escapeHtml(cutOffTimeStr) : '—'}</div>
       </div>
 
       <div class="section">
         <div class="section-title">Payment Details</div>
         <table class="payment-table">
-          <tr><td class="pay-label">Service CHG:</td><td class="pay-val">${escapeHtml(formatDecimal(serviceChg))}</td></tr>
+          <tr><td class="pay-label">Service Charges:</td><td class="pay-val">${escapeHtml(formatDecimal(totalNum))}</td></tr>
+          <tr><td class="pay-label">GST (16%):</td><td class="pay-val">${escapeHtml(formatDecimal(gstAmount))}</td></tr>
+          <tr><td class="pay-label">Fuel Surcharge (15%):</td><td class="pay-val">${escapeHtml(formatDecimal(fuelSurchargeAmount))}</td></tr>
           ${discount > 0 ? `<tr><td class="pay-label">Discount:</td><td class="pay-val">${escapeHtml(formatDecimal(discount))}</td></tr>` : ''}
           ${valueAddedService > 0 ? `<tr><td class="pay-label">Other Amount (Add):</td><td class="pay-val">${escapeHtml(formatDecimal(valueAddedService))}</td></tr>` : ''}
           ${isCod && codAmt > 0 ? `<tr><td class="pay-label">COD Amount:</td><td class="pay-val">${escapeHtml(formatDecimal(codAmt))}</td></tr>` : ''}
-          <tr><td class="pay-label pay-total">TOTAL:</td><td class="pay-val pay-total">${escapeHtml(formatDecimal(totalNum))}</td></tr>
+          <tr><td class="pay-label pay-total">TOTAL:</td><td class="pay-val pay-total">${escapeHtml(formatDecimal(paymentTotal))}</td></tr>
         </table>
       </div>
 
@@ -209,13 +217,12 @@ export function printBookingSlip(booking, options = {}) {
       ${preferredDeliveryLine ? `<div class="section">${preferredDeliveryLine}</div>` : ''}
 
       <div class="slip-footer">
-        <div class="footer-left">
-          <div>Helpline: ${escapeHtml(helpline)}</div>
-          <div>Website: ${escapeHtml(website)}</div>
-        </div>
-        <div class="footer-right">
-          <div>Customer Signature: _________________________</div>
-        </div>
+        <div class="footer-left">Helpline: ${escapeHtml(helpline)}</div>
+        <div class="footer-right">Website: ${escapeHtml(website)}</div>
+      </div>
+      <div class="signature-block">
+        <div class="signature-label">Customer Signature:</div>
+        <div class="signature-placeholder"></div>
       </div>
 
     </div>`
@@ -262,8 +269,13 @@ export function printBookingSlip(booking, options = {}) {
     .remarks-instructions-row { display: flex; gap: 16px; }
     .remarks-col, .instructions-col { flex: 1; min-width: 0; }
     .shipper-consignee-row { display: flex; gap: 16px; }
-    .shipper-col, .consignee-col { flex: 1; min-width: 0; }
-    .slip-footer { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid #333; font-size: 8px; margin-top: 6px; }
+    .shipper-col, .consignee-col { flex: 1; min-width: 0; border: 1px solid #333; padding: 8px; }
+    .slip-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #333; font-size: 8px; margin-top: 6px; }
+    .footer-left { text-align: left; }
+    .footer-right { text-align: right; }
+    .signature-block { margin-top: 16px; width: 100%; }
+    .signature-label { font-size: 9px; font-weight: 600; margin-bottom: 6px; }
+    .signature-placeholder { width: 100%; min-height: 36px; border-bottom: 2px solid #222; }
     .slip-footer-terms { margin-top: 4px; font-size: 7px; color: #555; text-align: center; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -353,11 +365,9 @@ export function printCodSlip(booking, options = {}) {
   const codAmount = codAmountNum > 0 ? formatDecimal(codAmountNum) : '—'
   const totalNum = shippingChargesVal + codAmountNum
   const total = b.totalAmount != null ? formatDecimal(b.totalAmount) : formatDecimal(totalNum)
-  const codAmountStr = `RS${String(Math.round(totalNum)).replace(/[\s,]/g, '')}` || 'RS0'
   const bookingDt = b.bookingDate ? new Date(b.bookingDate) : (b.createdAt ? new Date(b.createdAt) : new Date())
   const dateStr = bookingDt.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
   const timeStr = bookingDt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
-  const declaredValue = b.declaredValue != null ? formatDecimal(b.declaredValue) : '—'
   const handlingRaw = b.handlingInstructions || ''
   const parts = typeof handlingRaw === 'string' && handlingRaw.includes('%%%REMARKS%%%')
     ? handlingRaw.split('%%%REMARKS%%%')
@@ -370,7 +380,7 @@ export function printCodSlip(booking, options = {}) {
   const contactLine = `Incase of complaints, pls contact to ${escapeHtml(shipperName)}. Ph: ${escapeHtml(shipperPhone || '—')}`
   const helpline = options.helpline ?? '0335-2721975'
 
-  const codSlipSection = (copyLabel, cnBarcodeId, codBarcodeId) => `
+  const codSlipSection = (copyLabel, cnBarcodeId) => `
     <div class="cod-slip">
       <table class="cod-table">
         <tr>
@@ -408,44 +418,31 @@ export function printCodSlip(booking, options = {}) {
           <td class="cod-td-val">${escapeHtml(weightStr)}</td>
         </tr>
         <tr>
-          <td class="cod-td-label">Declared Insurance Value</td>
-          <td class="cod-td-val" colspan="3">${escapeHtml(declaredValue)}</td>
-        </tr>
-        <tr>
           <td class="cod-td-cod" colspan="2"><strong>COD AMOUNT</strong></td>
           <td class="cod-td-cod-barcode" colspan="2">
-            <div class="cod-barcode-wrap cod-amount-barcode"><svg id="${escapeHtml(codBarcodeId)}" class="cod-amount-barcode-svg"></svg></div>
             <div class="cod-amount-value">Rs. ${escapeHtml(total)}</div>
           </td>
         </tr>
         <tr>
-          <td class="cod-td-label">Product Detail</td>
-          <td class="cod-td-val" colspan="3">${escapeHtml(content)}</td>
+          <td class="cod-td-label cod-box-label">Product Detail</td>
+          <td class="cod-td-val cod-box-val">${escapeHtml(content)}</td>
+          <td class="cod-td-label cod-box-label">Handling Instructions</td>
+          <td class="cod-td-val cod-box-val">${escapeHtml(handlingInstructions)}</td>
         </tr>
         <tr>
-          <td class="cod-td-label">Payment</td>
-          <td class="cod-td-val" colspan="3">
-            <div><strong>Shipping:</strong> Rs. ${escapeHtml(shippingCharges)}</div>
-            <div><strong>Order Amount:</strong> Rs. ${escapeHtml(codAmount)}</div>
-            <div><strong>Total:</strong> Rs. ${escapeHtml(total)}</div>
-          </td>
-        </tr>
-        <tr>
-          <td class="cod-td-label">Handling Instructions</td>
-          <td class="cod-td-val" colspan="3">${escapeHtml(handlingInstructions)}</td>
-        </tr>
-        <tr>
-          <td class="cod-td-label">Customer Ref. #</td>
-          <td class="cod-td-val" colspan="3">${escapeHtml(customerRef)}</td>
-        </tr>
-        <tr>
-          <td class="cod-td-label">Remarks</td>
-          <td class="cod-td-val" colspan="3">${escapeHtml(remarks)}</td>
+          <td class="cod-td-label cod-box-label">Customer Ref. #</td>
+          <td class="cod-td-val cod-box-val">${escapeHtml(customerRef)}</td>
+          <td class="cod-td-label cod-box-label">Remarks</td>
+          <td class="cod-td-val cod-box-val">${escapeHtml(remarks)}</td>
         </tr>
       </table>
-      <div class="cod-disclaimer">${disclaimer}</div>
-      <div class="cod-contact">${contactLine}</div>
-      <div class="cod-helpline">Helpline: ${escapeHtml(helpline)}</div>
+      <div class="cod-footer-row">
+        <div>
+          <div class="cod-disclaimer">${disclaimer}</div>
+          <div class="cod-contact">${contactLine}</div>
+        </div>
+        <div class="cod-helpline">Helpline: ${escapeHtml(helpline)}</div>
+      </div>
       <div class="cod-cut">-------------</div>
     </div>`
 
@@ -470,6 +467,8 @@ export function printCodSlip(booking, options = {}) {
     .cod-td-val { }
     .cod-td-cod { font-weight: 700; text-align: center; }
     .cod-td-cod-barcode { text-align: center; }
+    .cod-box-label { width: 15%; }
+    .cod-box-val { width: 35%; }
     .cod-logo { display: flex; align-items: center; justify-content: flex-start; }
     .cod-logo-img { max-height: 36px; max-width: 120px; object-fit: contain; }
     .cod-logo .logo-fallback { display: none; align-items: center; gap: 6px; }
@@ -483,9 +482,10 @@ export function printCodSlip(booking, options = {}) {
     .cod-label { font-weight: 700; font-size: 9px; margin-bottom: 2px; }
     .cod-value { font-size: 9px; }
     .cod-amount-value { font-weight: 700; font-size: 12px; margin-top: 2px; }
-    .cod-disclaimer { font-size: 8px; margin-top: 6px; padding-top: 4px; border-top: 1px solid #ccc; }
+    .cod-footer-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 6px; padding-top: 4px; border-top: 1px solid #ccc; }
+    .cod-disclaimer { font-size: 8px; }
     .cod-contact { font-size: 8px; margin-top: 2px; }
-    .cod-helpline { font-size: 8px; margin-top: 2px; font-weight: 700; }
+    .cod-helpline { font-size: 8px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
     .cod-cut { font-size: 8px; color: #666; margin-top: 4px; text-align: center; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -498,23 +498,19 @@ export function printCodSlip(booking, options = {}) {
 <body>
   <div class="cod-page">
     <span id="cod-cn-value" style="display:none">${escapeHtml(cn)}</span>
-    <span id="cod-amount-value" style="display:none">${escapeHtml(codAmountStr)}</span>
-    ${codSlipSection('Accounts Copy', 'cod-cn-1', 'cod-amt-1')}
-    ${codSlipSection('Customer Copy', 'cod-cn-2', 'cod-amt-2')}
-    ${codSlipSection('Shipper Copy', 'cod-cn-3', 'cod-amt-3')}
+    ${codSlipSection('Accounts Copy', 'cod-cn-1')}
+    ${codSlipSection('Customer Copy', 'cod-cn-2')}
+    ${codSlipSection('Shipper Copy', 'cod-cn-3')}
   </div>
   <script>
     (function() {
       var cn = (document.getElementById('cod-cn-value') && document.getElementById('cod-cn-value').textContent) || '';
-      var amt = (document.getElementById('cod-amount-value') && document.getElementById('cod-amount-value').textContent) || 'RS0';
       function doPrint() {
         try {
-          if (typeof JsBarcode !== 'undefined') {
+          if (typeof JsBarcode !== 'undefined' && cn) {
             for (var i = 1; i <= 3; i++) {
               var el = document.getElementById('cod-cn-' + i);
-              if (el && cn) JsBarcode(el, cn, { format: 'CODE128', width: 1.5, height: 36, displayValue: false });
-              var amtEl = document.getElementById('cod-amt-' + i);
-              if (amtEl && amt) JsBarcode(amtEl, amt, { format: 'CODE128', width: 1.5, height: 28, displayValue: false });
+              if (el) JsBarcode(el, cn, { format: 'CODE128', width: 1.5, height: 36, displayValue: false });
             }
           }
         } catch (e) {}

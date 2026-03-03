@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://operations.nps.com.pk/api/v1'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'
 
 /**
  * API utility functions
@@ -805,6 +805,27 @@ export const api = {
     return this.handleResponse(response)
   },
 
+  /**
+   * Get batches that have eligible shipments for pickup (not yet requested).
+   * @returns {Promise<Array<{ batchId, batchCode, eligibleCount }>>}
+   */
+  async getEligibleBatchesForPickup() {
+    const response = await this.request('/pickups/eligible-batches', { method: 'GET' })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Create pickup requests for all eligible shipments in a batch (same details for all).
+   * @param {object} data - { batchId, pickupAddress, pickupDate, pickupTime?, contactName, contactPhone, specialInstructions? }
+   */
+  async createBatchPickupRequest(data) {
+    const response = await this.request('/pickups/batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse(response)
+  },
+
   async getAllPickups(params = {}) {
     const queryParams = new URLSearchParams()
     Object.keys(params).forEach(key => {
@@ -841,6 +862,14 @@ export const api = {
     const response = await this.request(`/pickups/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify(body),
+    })
+    return this.handleResponse(response)
+  },
+
+  async assignRiderToBatch(pickupIds, riderName, riderPhone) {
+    const response = await this.request('/pickups/admin/assign-rider-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ pickupIds, riderName, riderPhone }),
     })
     return this.handleResponse(response)
   },

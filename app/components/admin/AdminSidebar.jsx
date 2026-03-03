@@ -95,7 +95,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
             className="h-16 w-auto object-contain"
           />
           <div className="mt-2 text-center">
-            <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">Admin Control</span>
+            <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">Employee Portal</span>
           </div>
         </div>
       </div>

@@ -119,7 +119,7 @@ export class ConsignmentsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all consignments with optional filters' })
+  @ApiOperation({ summary: 'Get all consignments with optional filters and pagination' })
   async findAll(
     @Request() req,
     @Query('status') status?: BookingStatus,
@@ -128,6 +128,8 @@ export class ConsignmentsController {
     @Query('endDate') endDate?: string,
     @Query('cnNumber') cnNumber?: string,
     @Query('batchId') batchId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const filters: any = {};
     if (status) filters.status = status;
@@ -136,6 +138,10 @@ export class ConsignmentsController {
     if (endDate) filters.endDate = new Date(endDate);
     if (cnNumber) filters.cnNumber = cnNumber;
     if (batchId) filters.batchId = batchId;
+    const pageNum = page != null && page !== '' ? parseInt(page, 10) : undefined;
+    const limitNum = limit != null && limit !== '' ? parseInt(limit, 10) : undefined;
+    if (pageNum != null && !Number.isNaN(pageNum)) filters.page = pageNum;
+    if (limitNum != null && !Number.isNaN(limitNum)) filters.limit = limitNum;
 
     return this.consignmentsService.findAll(req.user, filters);
   }
@@ -171,7 +177,7 @@ export class ConsignmentsController {
     @Body('reason') reason: string,
     @Request() req,
   ) {
-    return this.consignmentsService.voidConsignment(cnNumber, reason, req.user.id);
+    return this.consignmentsService.voidConsignment(cnNumber, reason, req.user);
   }
 
   @Post(':id/approve')

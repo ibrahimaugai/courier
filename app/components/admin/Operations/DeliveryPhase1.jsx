@@ -45,18 +45,24 @@ export default function DeliveryPhase1({ setActivePage }) {
   const handlePrintDeliverySheet = async (sheetId) => {
     setPrintLoadingId(sheetId)
     try {
-      const result = await api.getDeliverySheetDetails(sheetId)
+      const [result, citiesRes] = await Promise.all([
+        api.getDeliverySheetDetails(sheetId),
+        api.getCities().catch(() => null)
+      ])
       const sheet = result?.data || result
       const bookings = Array.isArray(sheet?.bookings) ? sheet.bookings : []
       const riderName = sheet.rider?.name || sheet.riderName || '—'
       const vehicleNo = sheet.vehicle?.vehicleNumber || sheet.vehicleNo || '—'
       const originStation = sheet.originStation?.stationCode || sheet.originStation?.stationName || '—'
+      const citiesList = citiesRes?.data ?? citiesRes ?? []
+      const citiesMap = Array.isArray(citiesList) ? citiesList.reduce((acc, c) => { acc[c.id] = c; return acc }, {}) : {}
       const printed = printDeliverySheetReport(bookings, {
         sheetNumber: sheet.sheetNumber ?? '—',
         riderName,
         vehicleNo,
         originStation,
-        sheetDate: sheet.sheetDate
+        sheetDate: sheet.sheetDate,
+        citiesMap
       })
       if (!printed) {
         console.warn('Popup blocked: allow popups to print delivery sheet.')
@@ -166,7 +172,6 @@ export default function DeliveryPhase1({ setActivePage }) {
                 <th className="px-4 py-4">Sheet #</th>
                 <th className="px-4 py-4">Rider</th>
                 <th className="px-4 py-4">Vehicle</th>
-                <th className="px-4 py-4">Origin</th>
                 <th className="px-4 py-4 text-center">CNs</th>
                 <th className="px-4 py-4 text-center">Weight</th>
                 <th className="px-4 py-4 text-center">FOD</th>
@@ -178,10 +183,10 @@ export default function DeliveryPhase1({ setActivePage }) {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                <tr><td colSpan="12" className="py-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-sky-600" /></td></tr>
+                <tr><td colSpan="11" className="py-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-sky-600" /></td></tr>
               ) : sheets.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="py-12 text-center">
+                  <td colSpan="11" className="py-12 text-center">
                     <Truck className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                     <p className="text-sm font-black text-gray-300 uppercase tracking-widest">No delivery sheets found</p>
                     <p className="text-xs text-gray-400 mt-1">Create a new sheet to get started</p>
@@ -194,8 +199,6 @@ export default function DeliveryPhase1({ setActivePage }) {
                     <td className="px-4 py-4 text-xs font-black text-sky-700">{row.sheetNumber}</td>
                     <td className="px-4 py-4 text-xs font-bold text-gray-700">{row.rider?.name || row.riderName || 'N/A'}</td>
                     <td className="px-4 py-4 text-xs font-bold text-gray-600">{row.vehicleNo || row.vehicle?.vehicleNumber || '-'}</td>
-                    {/* Origin is usually station code */}
-                    <td className="px-4 py-4 text-xs font-bold text-gray-500">{row.originStation?.stationCode || row.originStationId?.slice(0, 4) || 'LHR'}</td>
                     <td className="px-4 py-4 text-center text-xs font-black text-gray-900">{row.totalCns}</td>
                     <td className="px-4 py-4 text-center text-xs font-bold text-gray-500">{row.totalWeight}</td>
                     <td className="px-4 py-4 text-center text-xs font-bold text-emerald-600">{row.totalFod}</td>

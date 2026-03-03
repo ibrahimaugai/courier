@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Query, Param, UseGuards, Request, Patch } 
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PickupsService } from './pickups.service';
 import { CreatePickupDto } from './dto/create-pickup.dto';
+import { CreateBatchPickupDto } from './dto/create-batch-pickup.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PickupStatus } from '@prisma/client';
 
@@ -16,6 +17,13 @@ export class PickupsController {
     @ApiOperation({ summary: 'Create a new pickup request' })
     async create(@Body() createPickupDto: CreatePickupDto, @Request() req) {
         return this.pickupsService.create(createPickupDto, req.user.id);
+    }
+
+    @Post('batch')
+    @ApiOperation({ summary: 'Create pickup requests for all eligible shipments in a batch' })
+    async createBatch(@Body() dto: CreateBatchPickupDto, @Request() req) {
+        const { batchId, ...details } = dto;
+        return this.pickupsService.createBatchPickup(batchId, details, req.user.id);
     }
 
     @Get('admin/all')
@@ -40,6 +48,24 @@ export class PickupsController {
     @ApiOperation({ summary: 'Get bookings eligible for pickup request' })
     async findEligibleBookings(@Request() req) {
         return this.pickupsService.findEligibleBookings(req.user.id);
+    }
+
+    @Get('eligible-batches')
+    @ApiOperation({ summary: 'Get batches that have eligible shipments for pickup (not yet requested)' })
+    async findEligibleBatches(@Request() req) {
+        return this.pickupsService.findEligibleBatches(req.user.id);
+    }
+
+    @Post('admin/assign-rider-bulk')
+    @ApiOperation({ summary: 'Assign rider to all pickups in a batch (by pickup IDs)' })
+    async assignRiderBulk(
+        @Body('pickupIds') pickupIds: string[],
+        @Body('riderName') riderName: string,
+        @Body('riderPhone') riderPhone: string,
+        @Request() req?: { user?: { id: string } },
+    ) {
+        const userId = req?.user?.id;
+        return this.pickupsService.assignRiderBulk(pickupIds || [], riderName, riderPhone, userId);
     }
 
     @Patch(':id/status')

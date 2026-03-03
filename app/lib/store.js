@@ -331,6 +331,7 @@ export const fetchBookings = createAsyncThunk(
   async (params, { rejectWithValue }) => {
     try {
       const response = await api.getBookings(params)
+      if (response && typeof response === 'object' && response.pagination != null) return response
       // Robustly handle both transformed and raw array responses
       return response?.data || (Array.isArray(response) ? response : [])
     } catch (error) {
@@ -574,6 +575,25 @@ const pickupSlice = createSlice({
         state.isLoading = false
         state.error = action.payload || action.error.message
       })
+    // Assign rider to batch (bulk)
+    builder
+      .addCase(assignRiderToBatch.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(assignRiderToBatch.fulfilled, (state, action) => {
+        state.isLoading = false
+        const updatedList = action.payload || []
+        if (updatedList.length) {
+          const ids = new Set(updatedList.map(p => p.id))
+          state.pickups = state.pickups.map(p => (ids.has(p.id) ? (updatedList.find(u => u.id === p.id) || p) : p))
+        }
+        state.success = true
+      })
+      .addCase(assignRiderToBatch.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload || action.error?.message
+      })
   },
 })
 
@@ -618,9 +638,9 @@ export const createPickupRequest = createAsyncThunk(
 
 export const fetchAllPickups = createAsyncThunk(
   'pickups/fetchAll',
-  async (_, { rejectWithValue }) => {
+  async (filters = {}, { rejectWithValue }) => {
     try {
-      const response = await api.getAllPickups()
+      const response = await api.getAllPickups(filters)
       return response?.data || (Array.isArray(response) ? response : [])
     } catch (error) {
       return rejectWithValue(error.message)
@@ -672,6 +692,18 @@ export const updatePickupStatus = createAsyncThunk(
     try {
       const response = await api.updatePickupStatus(id, status, riderId, riderName, riderPhone)
       return response?.data || response
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
+export const assignRiderToBatch = createAsyncThunk(
+  'pickups/assignRiderToBatch',
+  async ({ pickupIds, riderName, riderPhone }, { rejectWithValue }) => {
+    try {
+      const response = await api.assignRiderToBatch(pickupIds, riderName, riderPhone)
+      return Array.isArray(response) ? response : (response?.data || [])
     } catch (error) {
       return rejectWithValue(error.message)
     }

@@ -35,9 +35,16 @@ export class BatchesController {
     }
 
     @Get()
-    @ApiOperation({ summary: 'Get all batches' })
-    async findAll(@Request() req, @Query('date') date?: string) {
-        return this.batchesService.findAll(req.user.id, date);
+    @ApiOperation({ summary: 'Get all batches (paginated)' })
+    async findAll(
+        @Request() req,
+        @Query('date') date?: string,
+        @Query('limit') limit?: string,
+        @Query('page') page?: string,
+    ) {
+        const take = limit != null ? Math.min(Math.max(1, parseInt(limit, 10) || 10), 100) : undefined;
+        const pageNum = page != null ? Math.max(1, parseInt(page, 10) || 1) : 1;
+        return this.batchesService.findAll(req.user.id, date, take, pageNum);
     }
 
     @Get('latest')

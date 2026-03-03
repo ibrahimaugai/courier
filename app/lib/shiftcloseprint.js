@@ -121,6 +121,11 @@ export function printShiftCloseReport(bookings = [], options = {}) {
     .sc-sig-label { font-size: 10px; font-weight: 900; text-transform: uppercase; }
     .sc-sig-sub { font-size: 8px; color: #555; font-style: italic; margin-top: 2px; }
     .sc-footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 8px; color: #6b7280; display: flex; justify-content: space-between; text-transform: uppercase; font-weight: 700; }
+    .sc-staff-pickup { margin-top: 32px; page-break-inside: avoid; }
+    .sc-staff-pickup-title { font-size: 14px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.05em; }
+    .sc-staff-pickup-sub { font-size: 9px; color: #6b7280; margin-bottom: 12px; font-style: italic; }
+    .sc-staff-table { margin-top: 0; }
+    .sc-staff-cell { min-height: 36px; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .sc-page { box-shadow: none; }
@@ -170,6 +175,32 @@ export function printShiftCloseReport(bookings = [], options = {}) {
       </tfoot>
     </table>
     ${signatureBlock}
+    ${copyType === 'CUSTOMER COPY' ? `
+    <div class="sc-staff-pickup">
+      <h3 class="sc-staff-pickup-title">NPS Staff Pickup</h3>
+      <p class="sc-staff-pickup-sub">The rider who comes to pick up the shipments should manually fill in their details below before leaving.</p>
+      <table class="sc-table sc-staff-table">
+        <thead>
+          <tr class="sc-thead">
+            <th>Name</th>
+            <th>Courier Code</th>
+            <th>Signature</th>
+            <th>Date</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="sc-staff-cell">&nbsp;</td>
+            <td class="sc-staff-cell">&nbsp;</td>
+            <td class="sc-staff-cell">&nbsp;</td>
+            <td class="sc-staff-cell">&nbsp;</td>
+            <td class="sc-staff-cell">&nbsp;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
     <div class="sc-footer">
       <span>Printed on: ${new Date().toLocaleString()}</span>
       <span>Helpline: 0335-2721975 | Shift Close Summary - NPS Courier</span>

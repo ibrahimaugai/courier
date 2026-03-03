@@ -67,7 +67,7 @@ export default function Sidebar({ activePage, setActivePage }) {
               className="h-16 w-auto object-contain"
             />
             <div className="mt-2 text-center">
-              <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">User Panel</span>
+              <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">Customer Portal</span>
             </div>
           </div>
         </div>

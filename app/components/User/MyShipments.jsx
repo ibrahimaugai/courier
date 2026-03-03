@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Package,
@@ -15,27 +15,63 @@ import {
   Clock,
   XCircle,
   ArrowRight,
+  ArrowLeft,
   Loader2,
   AlertCircle,
-  Trash2
+  Trash2,
+  Ban
 } from 'lucide-react'
 import { fetchBookings, cancelBooking, clearBookingsError } from '../../lib/store'
+import { api } from '../../lib/api'
 
 export default function MyShipments({ setActivePage, setSelectedShipment }) {
   const dispatch = useDispatch()
-  const { bookings, isLoading, error } = useSelector((state) => state.bookings)
+  const { bookings, isLoading, error, pagination } = useSelector((state) => state.bookings)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [cancelConfirm, setCancelConfirm] = useState(null)
+  const [voidingId, setVoidingId] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 5
 
-  // Fetch bookings on mount - only if authenticated
+  // Fetch bookings when page or filters change
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     if (token) {
-      dispatch(fetchBookings({ page: 1, limit: 100 }))
+      const params = { page: currentPage, limit: pageSize }
+      if (searchTerm.trim()) params.cnNumber = searchTerm.trim()
+      if (statusFilter !== 'All') {
+        const statusToApi = {
+          'Pending Approval': 'PENDING',
+          'Booked': 'BOOKED',
+          'Pickup Requested': 'PICKUP_REQUESTED',
+          'Rider Assigned': 'RIDER_ON_WAY',
+          'In Transit': 'IN_TRANSIT',
+          'Delivered': 'DELIVERED',
+          'Cancelled': 'VOIDED',
+        }
+        if (statusToApi[statusFilter]) params.status = statusToApi[statusFilter]
+      }
+      dispatch(fetchBookings(params))
     }
-  }, [dispatch])
+  }, [dispatch, currentPage, searchTerm, statusFilter])
+
+  // Reset to page 1 when search or status filter changes
+  const prevSearchRef = useRef(searchTerm)
+  const prevStatusRef = useRef(statusFilter)
+  useEffect(() => {
+    if (prevSearchRef.current !== searchTerm || prevStatusRef.current !== statusFilter) {
+      prevSearchRef.current = searchTerm
+      prevStatusRef.current = statusFilter
+      setCurrentPage(1)
+    }
+  }, [searchTerm, statusFilter])
+
+  const goToPage = (page) => {
+    const p = Math.max(1, Math.min(page, pagination?.totalPages ?? 1))
+    setCurrentPage(p)
+  }
 
   // Map backend status to frontend status
   const mapBookingStatus = (status) => {
@@ -57,27 +93,34 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
 
   // Transform bookings to shipments format
   const safeBookings = Array.isArray(bookings) ? bookings : []
-  const shipments = safeBookings.map(booking => ({
-    id: booking.id,
-    cn: booking.cnNumber,
-    bookingDate: booking.bookingDate ? new Date(booking.bookingDate).toISOString().split('T')[0] : '',
-    origin: booking.originCity?.cityName || '',
-    destination: booking.destinationCity?.cityName || '',
-    service: booking.service?.serviceName || '',
-    weight: booking.weight?.toString() || '0',
-    payMode: booking.paymentMode || '',
-    status: mapBookingStatus(booking.status),
-    consigneeName: booking.consigneeName || '',
-    consigneePhone: booking.consigneePhone || '',
-    shipperName: booking.customer?.name || '',
-    shipperPhone: booking.customer?.phone || '',
-    pieces: booking.pieces || 0,
-    totalCharges: booking.totalAmount ? parseFloat(booking.totalAmount) : 0,
-    originalBooking: booking // Keep original for editing
-  }))
+  const shipments = safeBookings.map(booking => {
+    const latestPickup = Array.isArray(booking.pickupRequests) && booking.pickupRequests[0]
+    const riderName = latestPickup?.riderName || latestPickup?.assignedRider?.name || ''
+    const riderPhone = latestPickup?.riderPhone || latestPickup?.assignedRider?.phone || ''
+    return {
+      id: booking.id,
+      cn: booking.cnNumber,
+      bookingDate: booking.bookingDate ? new Date(booking.bookingDate).toISOString().split('T')[0] : '',
+      origin: booking.originCity?.cityName || '',
+      destination: booking.destinationCity?.cityName || '',
+      service: booking.service?.serviceName || '',
+      weight: booking.weight?.toString() || '0',
+      payMode: booking.paymentMode || '',
+      status: mapBookingStatus(booking.status),
+      consigneeName: booking.consigneeName || '',
+      consigneePhone: booking.consigneePhone || '',
+      shipperName: booking.customer?.name || '',
+      shipperPhone: booking.customer?.phone || '',
+      pieces: booking.pieces || 0,
+      totalCharges: booking.totalAmount ? parseFloat(booking.totalAmount) : 0,
+      riderName,
+      riderPhone,
+      originalBooking: booking
+    }
+  })
 
-  // Calculate summary stats
-  const totalShipments = shipments.length
+  // Calculate summary stats (use pagination total when available, else current list length)
+  const totalShipments = pagination?.total ?? shipments.length
   const pendingPickup = shipments.filter(s => ['Booked', 'Pickup Requested', 'Pending Approval', 'Rider Assigned'].includes(s.status)).length
   const inTransit = shipments.filter(s => s.status === 'In Transit').length
   const delivered = shipments.filter(s => s.status === 'Delivered').length
@@ -148,14 +191,46 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
       const result = await dispatch(cancelBooking(shipment.id))
 
       if (cancelBooking.fulfilled.match(result)) {
-        // Refresh bookings list
-        dispatch(fetchBookings({ page: 1, limit: 100 }))
+        const params = { page: currentPage, limit: pageSize }
+        if (searchTerm.trim()) params.cnNumber = searchTerm.trim()
+        dispatch(fetchBookings(params))
       } else {
         alert(result.payload || 'Failed to cancel booking')
       }
     } catch (error) {
       console.error('Error cancelling booking:', error)
       alert(error.message || 'Failed to cancel booking')
+    }
+  }
+
+  const canVoid = (status) =>
+    !['Delivered', 'Cancelled'].includes(status)
+
+  const handleVoid = async (shipment) => {
+    if (!shipment.cn) {
+      alert('CN number is required to void.')
+      return
+    }
+    const reason = window.prompt(`Enter reason for voiding shipment ${shipment.cn}:`)
+    if (reason === null || (reason && !reason.trim())) {
+      return
+    }
+
+    setVoidingId(shipment.id)
+    try {
+      dispatch(clearBookingsError())
+      await api.voidConsignment(shipment.cn, reason.trim())
+      const params = { page: currentPage, limit: pageSize }
+      if (searchTerm.trim()) params.cnNumber = searchTerm.trim()
+      if (statusFilter !== 'All') {
+        const statusToApi = { 'Pending Approval': 'PENDING', 'Booked': 'BOOKED', 'Pickup Requested': 'PICKUP_REQUESTED', 'Rider Assigned': 'RIDER_ON_WAY', 'In Transit': 'IN_TRANSIT', 'Delivered': 'DELIVERED', 'Cancelled': 'VOIDED' }
+        if (statusToApi[statusFilter]) params.status = statusToApi[statusFilter]
+      }
+      dispatch(fetchBookings(params))
+    } catch (error) {
+      alert(error?.message || 'Failed to void shipment.')
+    } finally {
+      setVoidingId(null)
     }
   }
 
@@ -285,13 +360,14 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider hidden lg:table-cell">Weight</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider hidden lg:table-cell">Pay Mode</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider hidden md:table-cell">Rider</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {!isLoading && filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
                     No shipments found
                   </td>
                 </tr>
@@ -321,6 +397,16 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {getStatusBadge(shipment.status)}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {shipment.status === 'Rider Assigned' && (shipment.riderName || shipment.riderPhone) ? (
+                        <div className="text-xs">
+                          {shipment.riderName && <div className="font-semibold text-gray-900">{shipment.riderName}</div>}
+                          {shipment.riderPhone && <div className="text-gray-600">{shipment.riderPhone}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -388,6 +474,19 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
                                   Cancel
                                 </button>
                               )}
+                              {canVoid(shipment.status) && (
+                                <button
+                                  onClick={() => {
+                                    handleVoid(shipment)
+                                    setShowActionsMenu(null)
+                                  }}
+                                  disabled={voidingId === shipment.id}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                                >
+                                  {voidingId === shipment.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                                  Void
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -426,6 +525,16 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
+                          {canVoid(shipment.status) && (
+                            <button
+                              onClick={() => handleVoid(shipment)}
+                              disabled={voidingId === shipment.id}
+                              className="p-1.5 hover:bg-red-100 rounded-md transition-colors text-red-600 disabled:opacity-50"
+                              title="Void"
+                            >
+                              {voidingId === shipment.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -436,6 +545,41 @@ export default function MyShipments({ setActivePage, setSelectedShipment }) {
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3">
+          <p className="text-sm text-gray-600">
+            Showing <span className="font-semibold">{((pagination.page - 1) * pagination.limit) + 1}</span>
+            {' '}-{' '}
+            <span className="font-semibold">
+              {Math.min(pagination.page * pagination.limit, pagination.total)}
+            </span>
+            {' '}of <span className="font-semibold">{pagination.total}</span> shipments
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1 || isLoading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <span className="text-sm text-gray-600 px-2">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= pagination.totalPages || isLoading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Info message for mobile users */}
       <div className="mt-4 sm:hidden text-xs text-gray-500 text-center">

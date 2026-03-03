@@ -1,20 +1,84 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../../lib/api'
-import { Loader2, RefreshCw, CheckCircle, AlertCircle, Scissors, PlusCircle } from 'lucide-react'
+import { Loader2, RefreshCw, CheckCircle, AlertCircle, Scissors, PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+
+const BATCHES_PER_PAGE = 5
 
 export default function BatchCutOff() {
   const [config, setConfig] = useState(null)
   const [batches, setBatches] = useState([])
-  const [activeBatch, setActiveBatch] = useState(null) // { id, batchCode } from backend – used for display and cut-off API
+  const [activeBatch, setActiveBatch] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalBatches, setTotalBatches] = useState(0)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
+    mountedRef.current = true
     fetchConfig()
-    fetchBatches()
+    return () => { mountedRef.current = false }
   }, [])
+
+  const loadBatchesAndActive = async (pageNum) => {
+    try {
+      const [batchesRes, latestRes] = await Promise.all([
+        api.getBatches({ limit: BATCHES_PER_PAGE, page: pageNum }),
+        api.getLatestBatch()
+      ])
+      const raw = batchesRes?.data ?? batchesRes
+      const list = Array.isArray(raw) ? raw : (raw?.data ?? [])
+      const total = raw?.total ?? list.length
+      const pages = raw?.totalPages ?? (Math.ceil(total / BATCHES_PER_PAGE) || 1)
+      setBatches(list)
+      setTotalBatches(total)
+      setTotalPages(pages)
+      const latest = latestRes?.data ?? latestRes
+      setActiveBatch(latest ? { id: latest.id, batchCode: latest.batchCode } : null)
+    } catch (err) {
+      console.error('Error fetching batches:', err)
+      setBatches([])
+      setTotalBatches(0)
+      setTotalPages(1)
+      setActiveBatch(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!mountedRef.current) return
+    let cancelled = false
+    const run = async () => {
+      try {
+        const [batchesRes, latestRes] = await Promise.all([
+          api.getBatches({ limit: BATCHES_PER_PAGE, page }),
+          api.getLatestBatch()
+        ])
+        if (cancelled) return
+        const raw = batchesRes?.data ?? batchesRes
+        const list = Array.isArray(raw) ? raw : (raw?.data ?? [])
+        const total = raw?.total ?? list.length
+        const pages = raw?.totalPages ?? (Math.ceil(total / BATCHES_PER_PAGE) || 1)
+        setBatches(list)
+        setTotalBatches(total)
+        setTotalPages(pages)
+        const latest = latestRes?.data ?? latestRes
+        setActiveBatch(latest ? { id: latest.id, batchCode: latest.batchCode } : null)
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Error fetching batches:', err)
+          setBatches([])
+          setTotalBatches(0)
+          setTotalPages(1)
+          setActiveBatch(null)
+        }
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [page])
 
   const fetchConfig = async () => {
     try {
@@ -28,17 +92,31 @@ export default function BatchCutOff() {
     }
   }
 
-  const fetchBatches = async () => {
+  const fetchActiveBatch = async () => {
     try {
-      const result = await api.getBatches()
-      const data = Array.isArray(result) ? result : (result?.data || [])
-      setBatches(data)
-      const active = data.find(b => b.status === 'ACTIVE')
-      setActiveBatch(active ? { id: active.id, batchCode: active.batchCode } : null)
+      const active = await api.getLatestBatch()
+      const resolved = active?.data ?? active
+      setActiveBatch(resolved ? { id: resolved.id, batchCode: resolved.batchCode } : null)
+    } catch (_) {
+      setActiveBatch(null)
+    }
+  }
+
+  const fetchBatches = async (pageNum = 1) => {
+    try {
+      const result = await api.getBatches({ limit: BATCHES_PER_PAGE, page: pageNum })
+      const raw = result?.data ?? result
+      const list = Array.isArray(raw) ? raw : (raw?.data ?? [])
+      const total = raw?.total ?? list.length
+      const pages = raw?.totalPages ?? (Math.ceil(total / BATCHES_PER_PAGE) || 1)
+      setBatches(list)
+      setTotalBatches(total)
+      setTotalPages(pages)
     } catch (err) {
       console.error('Error fetching batches:', err)
       setBatches([])
-      setActiveBatch(null)
+      setTotalBatches(0)
+      setTotalPages(1)
     }
   }
 
@@ -59,7 +137,7 @@ export default function BatchCutOff() {
       })
       setActiveBatch(newBatch ? { id: newBatch.id, batchCode: newBatch.batchCode } : null)
       setSuccess(`New Batch ${newBatch?.batchCode || ''} generated!`)
-      fetchBatches()
+      loadBatchesAndActive(page)
     } catch (err) {
       console.error('Error creating batch:', err)
       setError(err.message || 'Failed to generate batch.')
@@ -80,7 +158,7 @@ export default function BatchCutOff() {
       await api.updateBatchStatus(activeBatch.id, 'CLOSED')
       setSuccess(`Batch ${activeBatch.batchCode} has been cut off. Shift closed.`)
       setActiveBatch(null)
-      fetchBatches()
+      loadBatchesAndActive(page)
     } catch (err) {
       console.error('Error cutting off batch:', err)
       setError(err.message || 'Failed to perform batch cut-off.')
@@ -146,7 +224,7 @@ export default function BatchCutOff() {
             )}
             <button
               type="button"
-              onClick={fetchBatches}
+              onClick={() => loadBatchesAndActive(page)}
               className="w-full flex items-center justify-center gap-2 px-3 py-3 bg-sky-500 bg-opacity-30 text-white font-bold rounded-lg border border-white border-opacity-10 hover:bg-opacity-40 transition-all"
             >
               <RefreshCw className="w-4 h-4" />
@@ -162,12 +240,8 @@ export default function BatchCutOff() {
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Quick Stats</h3>
           <div className="space-y-3 flex-1">
             <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-              <span className="text-sm text-gray-600">Total Today</span>
-              <span className="text-lg font-bold text-gray-900">
-                {Array.isArray(batches)
-                  ? batches.filter(b => new Date(b.createdAt).toDateString() === new Date().toDateString()).length
-                  : 0}
-              </span>
+              <span className="text-sm text-gray-600">Total Batches</span>
+              <span className="text-lg font-bold text-gray-900">{totalBatches}</span>
             </div>
             <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
               <span className="text-sm text-gray-600">System</span>
@@ -224,7 +298,7 @@ export default function BatchCutOff() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {Array.isArray(batches) && batches.length > 0 ? (
-                batches.slice(0, 10).map((batch) => (
+                batches.map((batch) => (
                   <tr key={batch.id} className="hover:bg-sky-50 transition-colors group">
                     <td className="px-6 py-4 whitespace-nowrap text-base font-black text-sky-700">
                       {batch.batchCode}
@@ -254,6 +328,35 @@ export default function BatchCutOff() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Showing page <span className="font-bold text-gray-900">{page}</span> of <span className="font-bold text-gray-900">{totalPages}</span>
+              {totalBatches != null && <span> ({totalBatches} batch{totalBatches !== 1 ? 'es' : ''} total)</span>}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

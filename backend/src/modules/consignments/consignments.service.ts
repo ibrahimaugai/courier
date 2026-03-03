@@ -531,7 +531,7 @@ export class ConsignmentsService {
   }
 
   /**
-   * Get all consignments with filters
+   * Get all consignments with filters and optional pagination
    */
   async findAll(user: any, filters?: {
     status?: BookingStatus;
@@ -540,11 +540,11 @@ export class ConsignmentsService {
     endDate?: Date;
     cnNumber?: string;
     batchId?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: any = {};
 
-    // Only filter by creator if the user is a regular USER
-    // Admins and Super Admins can see all bookings
     if (user.role === 'USER') {
       where.createdBy = user.id;
     }
@@ -571,25 +571,58 @@ export class ConsignmentsService {
       }
     }
 
-    return this.prisma.booking.findMany({
-      where,
-      include: {
-        customer: true,
-        originCity: true,
-        destinationCity: true,
-        service: true,
-        product: true,
-        createdByUser: {
-          select: {
-            id: true,
-            username: true,
-            role: true,
-          },
+    const include = {
+      customer: true,
+      originCity: true,
+      destinationCity: true,
+      service: true,
+      product: true,
+      createdByUser: {
+        select: {
+          id: true,
+          username: true,
+          role: true,
         },
       },
-      orderBy: {
-        createdAt: 'desc',
+      pickupRequests: {
+        select: { riderName: true, riderPhone: true, status: true },
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
       },
+    };
+
+    const hasPagination = filters?.page != null || filters?.limit != null;
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filters?.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    if (hasPagination) {
+      const [bookings, total] = await Promise.all([
+        this.prisma.booking.findMany({
+          where,
+          include,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.booking.count({ where }),
+      ]);
+      const totalPages = Math.ceil(total / limit);
+      return {
+        data: bookings,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+        },
+      };
+    }
+
+    return this.prisma.booking.findMany({
+      where,
+      include,
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -684,7 +717,8 @@ export class ConsignmentsService {
   /**
    * Void a consignment by CN number
    */
-  async voidConsignment(cnNumber: string, reason: string, userId: string) {
+  async voidConsignment(cnNumber: string, reason: string, user: { id: string; role?: string }) {
+    const userId = user?.id;
     const booking = await this.prisma.booking.findUnique({
       where: { cnNumber },
     });
@@ -695,6 +729,11 @@ export class ConsignmentsService {
 
     if (booking.status === BookingStatus.VOIDED) {
       throw new BadRequestException(`Booking with CN ${cnNumber} is already voided`);
+    }
+
+    // Customers can only void their own bookings
+    if (user?.role === 'USER' && booking.createdBy !== userId) {
+      throw new BadRequestException('You can only void your own bookings');
     }
 
     return this.prisma.$transaction(async (tx) => {

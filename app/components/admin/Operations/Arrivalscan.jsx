@@ -101,47 +101,6 @@ export default function ArrivalScan({ setActivePage }) {
         </button>
       </div>
 
-      {/* Controls Bar */}
-      <div className="bg-white rounded-2xl shadow-xl shadow-sky-950/5 p-4 mb-6 border border-gray-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <button className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-red-100">
-            <FileText className="w-3.5 h-3.5" />
-            PDF
-          </button>
-          <button className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-emerald-100">
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            Excel
-          </button>
-          <button className="px-4 py-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-gray-100">
-            <Copy className="w-3.5 h-3.5" />
-            Copy
-          </button>
-          <div className="h-6 w-[1px] bg-gray-100 mx-2 hidden sm:block"></div>
-          <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-              className="bg-transparent text-xs font-black text-gray-700 focus:outline-none"
-            >
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-        </div>
-        <div className="relative group flex-1 sm:max-w-xs">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search within records..."
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-4 focus:ring-sky-500/5 focus:bg-white focus:border-sky-500 transition-all text-xs font-medium placeholder-gray-400"
-          />
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-hover:text-sky-500 transition-colors" />
-        </div>
-      </div>
-
       {/* History Table */}
       <div className="bg-white rounded-2xl shadow-2xl shadow-sky-950/5 border border-gray-50 overflow-hidden">
         <div className="overflow-x-auto">

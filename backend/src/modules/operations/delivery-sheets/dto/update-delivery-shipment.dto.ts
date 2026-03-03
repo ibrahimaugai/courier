@@ -17,4 +17,20 @@ export class UpdateDeliveryShipmentDto {
     @IsOptional()
     @IsDateString()
     deliveredAt?: string;
+
+    @IsOptional()
+    @IsString()
+    receiverName?: string;
+
+    @IsOptional()
+    @IsString()
+    receiverCnic?: string;
+
+    @IsOptional()
+    @IsString()
+    receiverPhone?: string;
+
+    @IsOptional()
+    @IsString()
+    deliveryStatusText?: string;
 }

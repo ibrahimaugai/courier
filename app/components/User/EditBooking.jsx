@@ -26,7 +26,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
     remarks: '',
     packetContent: '',
     services: '',
-    payMode: '',
+    payMode: 'Cash',
     volumetricWeight: '0',
     weight: '',
     // Shipper fields
@@ -225,7 +225,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
           ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
           : null,
         packetContent: formData.packetContent || '',
-        payMode: formData.payMode === 'Online' ? 'ONLINE' : 'CASH',
+        payMode: 'CASH', // Customer portal: always Cash
         weight: parseFloat(formData.weight || '0'),
         volumetricWeight: parseFloat(formData.volumetricWeight || '0') || null,
 

@@ -24,6 +24,11 @@ export class DeliverySheetsController {
         return this.deliverySheetsService.findAll(query);
     }
 
+    @Get('phase2/:sheetNumber')
+    getSheetForPhase2(@Param('sheetNumber') sheetNumber: string) {
+        return this.deliverySheetsService.getSheetForPhase2(sheetNumber);
+    }
+
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.deliverySheetsService.findOne(id);
@@ -44,17 +49,11 @@ export class DeliverySheetsController {
         return this.deliverySheetsService.removeShipment(id, shipmentId, req.user.id);
     }
 
-    // Phase 2 Routes
-    @Get('phase2/:sheetNumber')
-    getSheetForPhase2(@Param('sheetNumber') sheetNumber: string) {
-        return this.deliverySheetsService.getSheetForPhase2(sheetNumber);
-    }
-
     @Patch(':id/shipments/:shipmentId/status')
     updateShipmentStatus(
         @Param('id') sheetId: string,
         @Param('shipmentId') shipmentId: string,
-        @Body() updateData: { deliveryStatus?: string; deliveryRemarks?: string; collectedAmount?: number },
+        @Body() updateData: { deliveryStatus?: string; deliveryRemarks?: string; collectedAmount?: number; receiverName?: string; receiverCnic?: string; receiverPhone?: string; deliveryStatusText?: string },
         @Request() req
     ) {
         return this.deliverySheetsService.updateShipmentStatus(sheetId, shipmentId, updateData, req.user.id);

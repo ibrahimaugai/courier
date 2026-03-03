@@ -1,24 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Calendar, Search, User, MapPin, Phone, CheckCircle,
-  XCircle, Eye, Loader2, FileSpreadsheet, Copy, Printer,
-  FileText, ChevronsUpDown, AlertCircle, RefreshCw, Truck
+  XCircle, Eye, Loader2, Copy, Printer,
+  AlertCircle, RefreshCw, Truck, Clock, ChevronDown, ChevronRight, Package,
+  Layers, Box
 } from 'lucide-react'
-import { fetchAllPickups, updatePickupStatus, clearPickupsError, clearPickupsSuccess } from '../../../lib/store'
+import { fetchAllPickups, updatePickupStatus, assignRiderToBatch, clearPickupsError, clearPickupsSuccess } from '../../../lib/store'
 import { api } from '../../../lib/api'
-import { printPickupSheet } from '../../../lib/pickupSheetPrint'
+import { printPickupSheet, printPickupBatchSheet } from '../../../lib/pickupSheetPrint'
 import Toast from '../../Toast'
 
 export default function PickupManagement() {
   const dispatch = useDispatch()
   const { pickups, isLoading, error, success } = useSelector((state) => state.pickups)
 
+  const today = new Date().toISOString().split('T')[0]
   const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
+    startDate: today,
+    endDate: today,
     status: '',
     searchTerm: '',
     cityId: ''
@@ -26,12 +28,13 @@ export default function PickupManagement() {
 
   const [entriesPerPage, setEntriesPerPage] = useState(25)
   const [currentPage, setCurrentPage] = useState(1)
-  const [assignModal, setAssignModal] = useState({ isOpen: false, pickup: null })
+  const [assignModal, setAssignModal] = useState({ isOpen: false, batch: null })
   const [statusModal, setStatusModal] = useState({ isOpen: false, pickup: null, newStatus: '' })
   const [detailModal, setDetailModal] = useState({ isOpen: false, pickup: null })
   const [riderName, setRiderName] = useState('')
   const [riderPhone, setRiderPhone] = useState('')
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
+  const [expandedBatches, setExpandedBatches] = useState(new Set())
 
   useEffect(() => {
     loadPickups()
@@ -51,10 +54,11 @@ export default function PickupManagement() {
     loadPickups()
   }
 
-  const handleAssignRider = (pickup) => {
-    setAssignModal({ isOpen: true, pickup })
-    setRiderName(pickup.riderName || '')
-    setRiderPhone(pickup.riderPhone || '')
+  const handleAssignRiderToBatch = (batch) => {
+    const firstWithRider = batch.pickups.find(p => p.riderName || p.assignedRider?.name)
+    setAssignModal({ isOpen: true, batch })
+    setRiderName(firstWithRider ? (firstWithRider.riderName || firstWithRider.assignedRider?.name || '') : '')
+    setRiderPhone(firstWithRider ? (firstWithRider.riderPhone || firstWithRider.assignedRider?.phone || '') : '')
   }
 
   const handleConfirmAssign = async () => {
@@ -66,22 +70,24 @@ export default function PickupManagement() {
       setToast({ isVisible: true, message: 'Please enter rider phone number', type: 'error' })
       return
     }
+    if (!assignModal.batch?.pickups?.length) return
 
-    const result = await dispatch(updatePickupStatus({
-      id: assignModal.pickup.id,
-      status: 'ASSIGNED',
+    const result = await dispatch(assignRiderToBatch({
+      pickupIds: assignModal.batch.pickups.map(p => p.id),
       riderName: riderName.trim(),
       riderPhone: riderPhone.trim()
     }))
 
-    if (updatePickupStatus.fulfilled.match(result)) {
-      setToast({ isVisible: true, message: 'Rider assigned successfully!', type: 'success' })
-      setAssignModal({ isOpen: false, pickup: null })
+    if (assignRiderToBatch.fulfilled.match(result)) {
+      setToast({ isVisible: true, message: `Rider assigned to all ${assignModal.batch.pickups.length} pickup(s) in batch!`, type: 'success' })
+      setAssignModal({ isOpen: false, batch: null })
       setRiderName('')
       setRiderPhone('')
       loadPickups()
     }
   }
+
+  const batchNeedsRider = (batch) => batch.pickups.some(p => !p.riderName && !p.assignedRider?.name)
 
   const handleUpdateStatus = (pickup, newStatus) => {
     setStatusModal({ isOpen: true, pickup, newStatus })
@@ -102,6 +108,27 @@ export default function PickupManagement() {
       return
     }
     setToast({ isVisible: true, message: 'Print dialog opened', type: 'success' })
+  }
+
+  const handlePrintBatch = async (batch) => {
+    if (!batch?.pickups?.length) return
+    const bookingDetailsByCn = {}
+    for (const pickup of batch.pickups) {
+      const cn = pickup?.booking?.cnNumber
+      if (cn) {
+        try {
+          const res = await api.trackBooking(cn)
+          const detail = res?.data || res
+          if (detail) bookingDetailsByCn[cn] = detail
+        } catch (_) {}
+      }
+    }
+    const ok = printPickupBatchSheet(batch.label, batch.pickups, bookingDetailsByCn)
+    if (!ok) {
+      setToast({ isVisible: true, message: 'Allow popups to print', type: 'error' })
+      return
+    }
+    setToast({ isVisible: true, message: `Print opened: ${batch.pickups.length} booking(s) with details`, type: 'success' })
   }
 
   const handleConfirmStatusUpdate = async () => {
@@ -127,8 +154,72 @@ export default function PickupManagement() {
     return colors[status] || 'bg-slate-100 text-slate-800 border-slate-200'
   }
 
+  const formatCurrency = (val) => {
+    if (val == null || val === '') return '—'
+    const n = Number(val)
+    if (Number.isNaN(n)) return '—'
+    return `PKR ${n.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  }
+
+  /** Shipper = who the shipment is from (booking). Pickup = who to contact / where to go (pickup request). */
+  const getShipperDisplay = (pickup) => {
+    const b = pickup?.booking
+    return {
+      name: b?.shipperName || b?.customer?.name || '—',
+      phone: b?.shipperPhone ?? b?.customer?.phone ?? '—',
+      address: b?.shipperAddress ?? b?.customer?.address ?? '—',
+      city: b?.originCity?.cityName || '—'
+    }
+  }
+  const getPickupContactDisplay = (pickup) => {
+    return {
+      name: pickup?.contactName || '—',
+      phone: pickup?.contactPhone ?? '—',
+      address: pickup?.pickupAddress || '—',
+      city: pickup?.booking?.originCity?.cityName || '—'
+    }
+  }
+
   const safePickups = Array.isArray(pickups) ? pickups : []
-  const paginatedPickups = safePickups.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage)
+  const getBatchKey = (p) => (p?.booking?.batchId ?? p?.booking?.batch?.id ?? 'no-batch')
+  const getBatchLabel = (p) => (p?.booking?.batch?.batchCode || 'No batch')
+  const isBatchClosed = (p) => p?.booking?.batch?.status === 'CLOSED'
+  const pickupsForList = safePickups.filter((p) => !isBatchClosed(p))
+  const batchesMap = pickupsForList.reduce((acc, p) => {
+    const key = getBatchKey(p)
+    if (!acc[key]) acc[key] = { key, label: getBatchLabel(p), pickups: [] }
+    acc[key].pickups.push(p)
+    return acc
+  }, {})
+  const batches = Object.values(batchesMap).map(b => ({
+    ...b,
+    firstPickup: b.pickups[0],
+    statusCounts: b.pickups.reduce((c, p) => { c[p.status] = (c[p.status] || 0) + 1; return c }, {})
+  })).sort((a, b) => new Date(b.firstPickup?.pickupDate || 0) - new Date(a.firstPickup?.pickupDate || 0))
+
+  const paginatedBatches = batches.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage)
+  const totalBatches = batches.length
+
+  const handleMarkBatchDone = async (batch) => {
+    const batchId = batch.key
+    if (!batchId || batchId === 'no-batch') return
+    try {
+      await api.updateBatchStatus(batchId, 'CLOSED')
+      setToast({ isVisible: true, message: `Batch ${batch.label} marked as done and removed from list`, type: 'success' })
+      loadPickups()
+    } catch (err) {
+      setToast({ isVisible: true, message: err?.message || 'Failed to mark batch as done', type: 'error' })
+    }
+  }
+
+  const toggleBatch = (key) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
@@ -154,36 +245,6 @@ export default function PickupManagement() {
         {/* Filters Card */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  name="searchTerm"
-                  placeholder="CN, Name, Phone..."
-                  value={filters.searchTerm}
-                  onChange={handleFilterChange}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 text-sm outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</label>
-              <select
-                name="status"
-                value={filters.status}
-                onChange={handleFilterChange}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 text-sm bg-white outline-none"
-              >
-                <option value="">All Statuses</option>
-                <option value="REQUESTED">Requested</option>
-                <option value="ASSIGNED">Assigned</option>
-                <option value="PICKED">Picked</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Start Date</label>
@@ -218,18 +279,18 @@ export default function PickupManagement() {
           </div>
         </div>
 
-        {/* Main Table Content */}
+        {/* Main Table Content — Batch-first with expandable bookings */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Booking Info</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Address</th>
+                  <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-10" />
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Batch</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Contact &amp; Address</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Scheduled</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Shipments</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Rider</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
@@ -243,125 +304,213 @@ export default function PickupManagement() {
                       </div>
                     </td>
                   </tr>
-                ) : paginatedPickups.length === 0 ? (
+                ) : paginatedBatches.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="py-24 text-center">
                       <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <FileText className="w-8 h-8 text-slate-300" />
+                        <Package className="w-8 h-8 text-slate-300" />
                       </div>
-                      <p className="text-slate-500 font-medium text-lg">No pickup requests found</p>
-                      <button onClick={() => setFilters({ startDate: '', endDate: '', status: '', searchTerm: '', cityId: '' })} className="text-sky-600 text-sm font-semibold mt-2 hover:underline">Clear all filters</button>
+                      <p className="text-slate-500 font-medium text-lg">No pickup batches found</p>
+                      <button onClick={() => { const t = new Date().toISOString().split('T')[0]; const cleared = { startDate: t, endDate: t, status: '', searchTerm: '', cityId: '' }; setFilters(cleared); dispatch(fetchAllPickups(cleared)); }} className="text-sky-600 text-sm font-semibold mt-2 hover:underline">Clear all filters</button>
                     </td>
                   </tr>
                 ) : (
-                  paginatedPickups.map((pickup) => (
-                    <tr key={pickup.id} className="hover:bg-slate-50/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-sky-600 flex items-center gap-1">
-                            {pickup.booking?.cnNumber}
-                            <button onClick={() => navigator.clipboard.writeText(pickup.booking?.cnNumber)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Copy className="w-3 h-3 text-slate-400 hover:text-sky-600" />
-                            </button>
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">
-                            {pickup.createdAt ? (
-                              `${new Date(pickup.createdAt).toLocaleDateString()} at ${new Date(pickup.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                            ) : (
-                              'N/A'
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-slate-900">{pickup.contactName}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 font-medium">
-                          <Phone className="w-3 h-3 text-slate-400" />
-                          {pickup.contactPhone}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-slate-600 max-w-[200px] truncate leading-snug" title={pickup.pickupAddress}>
-                          {pickup.pickupAddress}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 bg-slate-100 inline-block px-1.5 rounded">
-                          {pickup.booking?.originCity?.cityName || 'Unknown'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-semibold text-slate-800">
-                          {new Date(pickup.pickupDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </div>
-                        <div className="text-xs text-sky-600 font-medium mt-0.5">
-                          {pickup.pickupTime || 'Flexible Time'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(pickup.status)}`}>
-                          {pickup.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {pickup.riderName || (pickup.assignedRider && pickup.assignedRider.name) ? (
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 text-xs font-bold border border-sky-200">
-                              {(pickup.riderName || pickup.assignedRider?.name || '').charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{pickup.riderName || pickup.assignedRider?.name}</div>
-                              <div className="text-[11px] text-slate-500 font-medium">
-                                {pickup.riderPhone || pickup.assignedRider?.phone || '—'}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleAssignRider(pickup)}
-                            className="px-3 py-1.5 bg-white text-sky-600 rounded-lg text-[11px] font-bold border border-sky-100 hover:bg-sky-50 transition-all flex items-center gap-1.5 shadow-sm"
-                          >
-                            <User className="w-3 h-3" />
-                            Assign Rider
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setDetailModal({ isOpen: true, pickup })}
-                            className="p-2 text-slate-400 hover:text-sky-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-sky-100"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {pickup.status === 'REQUESTED' && (
+                  paginatedBatches.map((batch) => {
+                    const isExpanded = expandedBatches.has(batch.key)
+                    const first = batch.firstPickup
+                    return (
+                      <Fragment key={batch.key}>
+                        <tr
+                          key={batch.key}
+                          className="bg-slate-50/30 hover:bg-slate-50 transition-colors border-b border-slate-100"
+                        >
+                          <td className="px-2 py-3">
                             <button
-                              onClick={() => handleUpdateStatus(pickup, 'PICKED')}
-                              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-emerald-100"
-                              title="Complete Pickup"
+                              onClick={() => toggleBatch(batch.key)}
+                              className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-500 hover:text-slate-700 transition-colors"
+                              aria-label={isExpanded ? 'Collapse batch' : 'Expand batch'}
                             >
-                              <CheckCircle className="w-4 h-4" />
+                              {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                             </button>
-                          )}
-                          <button
-                            onClick={() => handlePrintPickup(pickup)}
-                            className="p-2 text-slate-400 hover:text-sky-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-sky-100"
-                            title="Print full details"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-bold text-slate-900">{batch.label}</span>
+                              <span className="text-xs text-slate-400 font-medium">({batch.pickups.length} pickup{batch.pickups.length !== 1 ? 's' : ''})</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {(() => {
+                              const p = batch.firstPickup
+                              if (!p) return <span className="text-slate-400">—</span>
+                              return (
+                                <>
+                                  <div className="text-sm font-bold text-slate-900">{p.contactName || '—'}</div>
+                                  <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 font-medium">
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    {p.contactPhone || '—'}
+                                  </div>
+                                  <div className="text-xs text-slate-600 max-w-[220px] truncate mt-1" title={p.pickupAddress}>{p.pickupAddress || '—'}</div>
+                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 bg-slate-100 inline-block px-1.5 rounded">
+                                    {p?.booking?.originCity?.cityName || '—'}
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-slate-800">
+                              {first?.pickupDate ? new Date(first.pickupDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                            </div>
+                            <div className="text-xs text-sky-600 font-medium mt-0.5">{first?.pickupTime || 'Flexible'}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-700">
+                              <Package className="w-3.5 h-3.5" />
+                              {batch.pickups.length}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(batch.statusCounts).map(([status, count]) => (
+                                <span key={status} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(status)}`}>
+                                  {count} {status}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {batchNeedsRider(batch) && (
+                                <button
+                                  onClick={() => handleAssignRiderToBatch(batch)}
+                                  className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-[11px] font-bold hover:bg-sky-700 transition-all flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <User className="w-3 h-3" />
+                                  Assign Rider
+                                </button>
+                              )}
+                              <button
+                                onClick={() => toggleBatch(batch.key)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sky-600 hover:bg-sky-50 rounded-lg text-sm font-bold transition-colors"
+                                title={isExpanded ? 'Collapse' : 'View bookings'}
+                              >
+                                <Eye className="w-4 h-4" />
+                                View
+                              </button>
+                              <button
+                                onClick={() => handlePrintBatch(batch)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-bold border border-slate-200 transition-colors"
+                                title="Print pickup sheet(s)"
+                              >
+                                <Printer className="w-4 h-4" />
+                                Print
+                              </button>
+                              {batch.key !== 'no-batch' && (
+                                <button
+                                  onClick={() => handleMarkBatchDone(batch)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-bold border border-emerald-200 transition-colors"
+                                  title="Mark batch as done (removes from list)"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  Done
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="7" className="p-0 align-top bg-slate-50/50">
+                              <div className="px-4 pb-4 pt-1">
+                                <table className="w-full text-left border-collapse rounded-lg overflow-hidden border border-slate-200 bg-white shadow-sm">
+                                  <thead>
+                                    <tr className="bg-slate-100 border-b border-slate-200">
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">CN</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Shipper</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Service / Product</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Scheduled</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pricing</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                      <th className="px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Rider</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {batch.pickups.map((pickup) => {
+                                      const b = pickup.booking
+                                      const shipper = getShipperDisplay(pickup)
+                                      const svc = b?.service
+                                      const prod = b?.product
+                                      return (
+                                        <tr key={pickup.id} className="hover:bg-slate-50/80 transition-colors group">
+                                          <td className="px-4 py-3">
+                                            <span className="text-sm font-bold text-sky-600 flex items-center gap-1">
+                                              {b?.cnNumber}
+                                              <button onClick={() => navigator.clipboard.writeText(b?.cnNumber)} className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5">
+                                                <Copy className="w-3 h-3 text-slate-400 hover:text-sky-600" />
+                                              </button>
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-3 min-w-[200px]">
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Shipper</div>
+                                            <div className="text-sm font-bold text-slate-900">{shipper.name}</div>
+                                            <div className="text-xs text-slate-500 flex items-center gap-1 font-medium"><Phone className="w-3 h-3 shrink-0" />{shipper.phone}</div>
+                                            <div className="text-xs text-slate-600 truncate max-w-[220px]" title={shipper.address}>{shipper.address}</div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5 bg-slate-100 inline-block px-1.5 rounded">{shipper.city || '—'}</div>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <div className="text-xs font-semibold text-slate-800">{svc?.serviceName || '—'}</div>
+                                            <div className="text-[10px] text-slate-500">{prod?.productName || '—'}</div>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <div className="text-sm font-semibold text-slate-800">
+                                              {pickup.pickupDate ? new Date(pickup.pickupDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                                            </div>
+                                            <div className="text-xs text-sky-600 font-medium mt-0.5">{pickup.pickupTime || 'Flexible'}</div>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <div className="text-xs font-bold text-slate-800">{formatCurrency(b?.totalAmount)}</div>
+                                            <div className="text-[10px] text-slate-500">{b?.paymentMode || '—'}</div>
+                                            {b?.codAmount != null && Number(b.codAmount) > 0 && (
+                                              <div className="text-[10px] text-amber-700 font-medium">COD {formatCurrency(b.codAmount)}</div>
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(pickup.status)}`}>
+                                              {pickup.status}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            {pickup.riderName || pickup.assignedRider?.name ? (
+                                              <div className="text-sm">
+                                                <span className="font-bold text-slate-900">{pickup.riderName || pickup.assignedRider?.name}</span>
+                                                <div className="text-xs text-slate-500 font-medium">{pickup.riderPhone || pickup.assignedRider?.phone || '—'}</div>
+                                              </div>
+                                            ) : (
+                                              <span className="text-xs text-slate-400 italic">—</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination */}
+          {/* Pagination — by batch */}
           <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-slate-500 font-medium">
-              Showing <span className="text-slate-900 font-bold">{Math.min(paginatedPickups.length, entriesPerPage)}</span> of <span className="text-slate-900 font-bold">{pickups.length}</span> results
+              Showing <span className="text-slate-900 font-bold">{paginatedBatches.length}</span> batch{paginatedBatches.length !== 1 ? 'es' : ''} (<span className="text-slate-900 font-bold">{pickupsForList.length}</span> pickup{pickupsForList.length !== 1 ? 's' : ''})
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -372,7 +521,7 @@ export default function PickupManagement() {
                 Prev
               </button>
               <div className="flex items-center gap-1.5">
-                {[...Array(Math.ceil(pickups.length / entriesPerPage))].map((_, i) => (
+                {[...Array(Math.max(1, Math.ceil(totalBatches / entriesPerPage)))].map((_, i) => (
                   <button
                     key={i}
                     onClick={() => setCurrentPage(i + 1)}
@@ -386,7 +535,7 @@ export default function PickupManagement() {
                 ))}
               </div>
               <button
-                disabled={currentPage === Math.ceil(pickups.length / entriesPerPage) || pickups.length === 0}
+                disabled={currentPage >= Math.ceil(totalBatches / entriesPerPage) || totalBatches === 0}
                 onClick={() => setCurrentPage(p => p + 1)}
                 className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
               >
@@ -397,11 +546,11 @@ export default function PickupManagement() {
         </div>
       </div>
 
-      {/* Assign Rider Modal */}
-      {assignModal.isOpen && (
+      {/* Assign Rider to Batch Modal */}
+      {assignModal.isOpen && assignModal.batch && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => {
-            setAssignModal({ isOpen: false, pickup: null })
+            setAssignModal({ isOpen: false, batch: null })
             setRiderName('')
             setRiderPhone('')
           }} />
@@ -409,9 +558,10 @@ export default function PickupManagement() {
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Truck className="w-6 h-6 text-sky-600" />
-                Assign Rider
+                Assign Rider to Batch
               </h3>
-              <p className="text-sm text-slate-500 mt-1 uppercase tracking-tighter font-bold">CN: {assignModal.pickup.booking?.cnNumber}</p>
+              <p className="text-sm text-slate-500 mt-1 font-bold">Batch: {assignModal.batch.label}</p>
+              <p className="text-xs text-slate-400 mt-0.5">This rider will be assigned to all {assignModal.batch.pickups.length} pickup(s) in this batch.</p>
             </div>
             <div className="p-6 space-y-4">
               <div className="space-y-2">
@@ -453,7 +603,7 @@ export default function PickupManagement() {
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
               <button
                 onClick={() => {
-                  setAssignModal({ isOpen: false, pickup: null })
+                  setAssignModal({ isOpen: false, batch: null })
                   setRiderName('')
                   setRiderPhone('')
                 }}
@@ -575,30 +725,168 @@ export default function PickupManagement() {
                 </div>
               </div>
 
-              {/* Contact Card */}
+              {/* Shipper (from booking — who the shipment is from) */}
+              {detailModal.pickup.booking && (detailModal.pickup.booking.shipperName || detailModal.pickup.booking.customer?.name) && (
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Shipper <span className="text-slate-400 font-normal normal-case">(who the shipment is from)</span></h3>
+                  <div className="bg-slate-50 border border-slate-100 p-6 rounded-2xl space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                        <User className="w-5 h-5 text-sky-600" />
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900">
+                          {detailModal.pickup.booking.shipperName || detailModal.pickup.booking.customer?.name}
+                          {detailModal.pickup.booking.shipperCompanyName && (
+                            <span className="block text-sm font-medium text-slate-500">{detailModal.pickup.booking.shipperCompanyName}</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5" />
+                          {detailModal.pickup.booking.shipperPhone || detailModal.pickup.booking.customer?.phone || '—'}
+                        </div>
+                        {(detailModal.pickup.booking.shipperEmail || detailModal.pickup.booking.customer?.email) && (
+                          <div className="text-xs text-slate-500 mt-0.5">{detailModal.pickup.booking.shipperEmail || detailModal.pickup.booking.customer?.email}</div>
+                        )}
+                      </div>
+                    </div>
+                    {(detailModal.pickup.booking.shipperAddress || detailModal.pickup.booking.customer?.address) && (
+                      <div className="flex items-start gap-4">
+                        <div className="bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                          <MapPin className="w-5 h-5 text-rose-600" />
+                        </div>
+                        <div className="flex-1 text-sm text-slate-700 font-medium leading-relaxed">
+                          {detailModal.pickup.booking.shipperAddress || detailModal.pickup.booking.customer?.address}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Pickup Contact & Address (where to collect) */}
               <div className="space-y-4">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Shipper Details</h3>
-                <div className="bg-slate-50 border border-slate-100 p-6 rounded-2xl space-y-4">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pickup Contact &amp; Address <span className="text-slate-400 font-normal normal-case">(who to contact and where to collect)</span></h3>
+                <div className="bg-sky-50/50 border border-sky-100 p-6 rounded-2xl space-y-4">
                   <div className="flex items-start gap-4">
-                    <div className="bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                    <div className="bg-white p-2.5 rounded-xl shadow-sm border border-sky-100">
                       <User className="w-5 h-5 text-sky-600" />
                     </div>
                     <div>
-                      <div className="font-black text-slate-900">{detailModal.pickup.contactName}</div>
-                      <div className="text-sm text-slate-500 font-medium">{detailModal.pickup.contactPhone}</div>
+                      <div className="font-black text-slate-900">{detailModal.pickup.contactName || '—'}</div>
+                      <div className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5" />
+                        {detailModal.pickup.contactPhone || '—'}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
-                    <div className="bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
+                    <div className="bg-white p-2.5 rounded-xl shadow-sm border border-sky-100">
                       <MapPin className="w-5 h-5 text-rose-600" />
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm text-slate-700 font-bold leading-relaxed">{detailModal.pickup.pickupAddress}</div>
+                      <div className="text-sm text-slate-700 font-bold leading-relaxed">{detailModal.pickup.pickupAddress || '—'}</div>
                       <div className="text-xs text-slate-400 mt-1 uppercase font-black">{detailModal.pickup.booking?.originCity?.cityName || 'Unknown Origin'}</div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* Service & Product */}
+              {(detailModal.pickup.booking?.service || detailModal.pickup.booking?.product) && (
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Service &amp; Product</h3>
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl flex flex-wrap gap-6">
+                    {detailModal.pickup.booking.service && (
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-100">
+                          <Layers className="w-5 h-5 text-sky-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-400 uppercase">Service</div>
+                          <div className="font-bold text-slate-900">{detailModal.pickup.booking.service.serviceName}</div>
+                          <div className="text-xs text-slate-500">{detailModal.pickup.booking.service.serviceType} {detailModal.pickup.booking.service.serviceCode && ` · ${detailModal.pickup.booking.service.serviceCode}`}</div>
+                        </div>
+                      </div>
+                    )}
+                    {detailModal.pickup.booking.product && (
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                          <Box className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-400 uppercase">Product</div>
+                          <div className="font-bold text-slate-900">{detailModal.pickup.booking.product.productName}</div>
+                          {detailModal.pickup.booking.product.productCode && (
+                            <div className="text-xs text-slate-500">{detailModal.pickup.booking.product.productCode}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Pricing & Shipment */}
+              {detailModal.pickup.booking && (
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pricing &amp; Shipment</h3>
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-slate-400 font-medium block text-xs">Weight / Pieces</span>
+                        <span className="font-bold text-slate-900">
+                          {detailModal.pickup.booking.weight != null ? `${Number(detailModal.pickup.booking.weight)} kg` : '—'}
+                          {detailModal.pickup.booking.pieces != null && ` · ${detailModal.pickup.booking.pieces} pcs`}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-medium block text-xs">Payment mode</span>
+                        <span className="font-bold text-slate-900">{detailModal.pickup.booking.paymentMode || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-medium block text-xs">Rate</span>
+                        <span className="font-bold text-slate-900">{formatCurrency(detailModal.pickup.booking.rate)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-medium block text-xs">Total amount</span>
+                        <span className="font-bold text-sky-700">{formatCurrency(detailModal.pickup.booking.totalAmount)}</span>
+                      </div>
+                      {detailModal.pickup.booking.codAmount != null && Number(detailModal.pickup.booking.codAmount) > 0 && (
+                        <div className="col-span-2">
+                          <span className="text-slate-400 font-medium block text-xs">COD amount</span>
+                          <span className="font-bold text-amber-700">{formatCurrency(detailModal.pickup.booking.codAmount)}</span>
+                        </div>
+                      )}
+                      {(detailModal.pickup.booking.packetContent || detailModal.pickup.booking.handlingInstructions) && (
+                        <div className="col-span-2">
+                          <span className="text-slate-400 font-medium block text-xs">Content / Instructions</span>
+                          <span className="text-slate-700 text-sm">{detailModal.pickup.booking.packetContent || '—'} {detailModal.pickup.booking.handlingInstructions && ` · ${detailModal.pickup.booking.handlingInstructions}`}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Consignee */}
+              {(detailModal.pickup.booking?.consigneeName || detailModal.pickup.booking?.consigneeAddress) && (
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Consignee</h3>
+                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-2">
+                    <div className="font-bold text-slate-900">{detailModal.pickup.booking.consigneeName || '—'}</div>
+                    {detailModal.pickup.booking?.consigneeCompanyName && (
+                      <div className="text-xs text-slate-500">{detailModal.pickup.booking.consigneeCompanyName}</div>
+                    )}
+                    {detailModal.pickup.booking?.consigneePhone && (
+                      <div className="text-sm text-slate-600 font-medium">{detailModal.pickup.booking.consigneePhone}</div>
+                    )}
+                    {detailModal.pickup.booking?.consigneeAddress && (
+                      <div className="text-sm text-slate-600">{detailModal.pickup.booking.consigneeAddress}</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Instructions Section */}
               <div className="space-y-2">
@@ -639,25 +927,5 @@ export default function PickupManagement() {
         onClose={() => setToast({ ...toast, isVisible: false })}
       />
     </div>
-  )
-}
-
-// Utility icon for Clock which was missing from imports
-function Clock(props) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24" height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
   )
 }

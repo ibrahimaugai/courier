@@ -56,7 +56,7 @@ export default function UserBookingConsignment() {
     remarks: '',
     packetContent: '',
     services: '',
-    payMode: '',
+    payMode: 'Cash',
     volumetricWeight: '0',
     weight: '',
     // Shipper fields
@@ -702,7 +702,7 @@ export default function UserBookingConsignment() {
     e.preventDefault()
 
     // Validate required fields
-    if (!formData.product || !formData.destination || !formData.services || !formData.payMode ||
+    if (!formData.product || !formData.destination || !formData.services ||
       !formData.weight || !formData.packetContent || !formData.mobileNumber || !formData.fullName ||
       !formData.address || !formData.consigneeMobileNumber || !formData.consigneeFullName ||
       !formData.consigneeAddress) {
@@ -734,7 +734,7 @@ export default function UserBookingConsignment() {
           ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
           : undefined,
         packetContent: formData.packetContent,
-        payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
+        payMode: 'CASH', // Customer portal: always Cash
         preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
         preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
         weight: parseFloat(formData.weight || '0'),
@@ -785,7 +785,11 @@ export default function UserBookingConsignment() {
 
       // CN print on save – necessary for customer to get their copy
       try {
-        const citiesMap = (cities || []).reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+        const citiesArr = cities || []
+        const citiesMap = citiesArr.reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+        const citiesById = citiesArr.reduce((acc, c) => { acc[c.id] = c; return acc }, {})
+        const originCityObj = formData.originCity && citiesById[formData.originCity]
+        const destCityObj = formData.destination && citiesById[formData.destination]
         const handlingInstructionsForPrint = (formData.handlingInstructions || formData.remarks)
           ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
           : (booking?.handlingInstructions || '')
@@ -797,8 +801,8 @@ export default function UserBookingConsignment() {
           consigneeFullName: booking?.consigneeName ?? formData.consigneeFullName,
           consigneeMobileNumber: booking?.consigneePhone ?? formData.consigneeMobileNumber,
           consigneeAddress: booking?.consigneeAddress ?? formData.consigneeAddress,
-          originCity: booking?.originCity ?? (formData.originCity ? { cityName: citiesMap[formData.originCity] || formData.originCity } : null),
-          destinationCity: booking?.destinationCity ?? (formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination } : null),
+          originCity: booking?.originCity ? { ...booking.originCity, cityCode: booking.originCity.cityCode || originCityObj?.cityCode } : (formData.originCity ? { cityName: citiesMap[formData.originCity] || formData.originCity, cityCode: originCityObj?.cityCode || originCityObj?.code } : null),
+          destinationCity: booking?.destinationCity ? { ...booking.destinationCity, cityCode: booking.destinationCity.cityCode || destCityObj?.cityCode } : (formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination, cityCode: destCityObj?.cityCode || destCityObj?.code } : null),
           product: booking?.product ?? (formData.product ? { productName: formData.product } : null),
           service: booking?.service ?? (formData.services ? { serviceName: formData.services } : null),
           handlingInstructions: handlingInstructionsForPrint || booking?.handlingInstructions,
@@ -806,6 +810,12 @@ export default function UserBookingConsignment() {
           codAmount: formData.product === 'COD' ? (parseFloat(formData.codAmount) || booking?.codAmount) : booking?.codAmount,
           customerRef: formData.customerRef || booking?.dcReferenceNo || booking?.customerRef,
           dcReferenceNo: formData.customerRef || booking?.dcReferenceNo,
+          subserviceNames: (selectedSubservices?.length && formData.services)
+            ? (subservicesData[formData.services] || [])
+                .filter((s) => selectedSubservices.includes(s.id))
+                .map((s) => s.name)
+                .filter(Boolean)
+            : undefined,
         }
         let config = {}
         try {
@@ -832,7 +842,7 @@ export default function UserBookingConsignment() {
         remarks: '',
         packetContent: '',
         services: '',
-        payMode: '',
+        payMode: 'Cash',
         volumetricWeight: '0',
         weight: '',
         mobileNumber: '',

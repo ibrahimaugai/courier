@@ -142,7 +142,12 @@ export class DeliverySheetsService {
                 vehicle: true,
                 // route: true, // Commented out until prisma generate is run
                 originStation: true,
-                bookings: true,
+                bookings: {
+                    include: {
+                        originCity: true,
+                        destinationCity: true,
+                    }
+                },
                 deliverySheetShipments: true
             }
         });
@@ -300,8 +305,12 @@ export class DeliverySheetsService {
         shipmentId: string,
         updateData: {
             deliveryStatus?: string;
+            deliveryStatusText?: string;
             deliveryRemarks?: string;
             collectedAmount?: number;
+            receiverName?: string;
+            receiverCnic?: string;
+            receiverPhone?: string;
         },
         userId: string
     ) {
@@ -318,26 +327,42 @@ export class DeliverySheetsService {
             throw new BadRequestException('Shipment does not belong to this delivery sheet');
         }
 
+        const statusText = (updateData.deliveryStatusText ?? updateData.deliveryStatus ?? '').trim();
+        const statusUpper = statusText.toUpperCase();
+        let normalizedEnum: DeliveryStatus = DeliveryStatus.PENDING;
+        if (statusUpper.includes('DELIVERED')) normalizedEnum = DeliveryStatus.DELIVERED;
+        else if (statusUpper.includes('RETURNED')) normalizedEnum = DeliveryStatus.RETURNED;
+        else if (statusUpper.includes('REFUSED')) normalizedEnum = DeliveryStatus.REFUSED;
+        else if (statusUpper.includes('NOT_DELIVERED') || statusUpper.includes('NOT DELIVERED')) normalizedEnum = DeliveryStatus.NOT_DELIVERED;
+        else if (statusUpper.includes('PENDING')) normalizedEnum = DeliveryStatus.PENDING;
+        else if (statusText && ['DELIVERED', 'RETURNED', 'REFUSED', 'NOT_DELIVERED', 'PENDING'].includes(statusUpper)) normalizedEnum = statusUpper as DeliveryStatus;
+
         return this.prisma.$transaction(async (tx) => {
-            // Update shipment status
+            const updatePayload: Record<string, any> = {
+                deliveryStatus: normalizedEnum,
+                deliveredAt: normalizedEnum === DeliveryStatus.DELIVERED ? new Date() : null,
+                deliveryRemarks: updateData.deliveryRemarks ?? null,
+                receiverName: updateData.receiverName ?? null,
+                receiverCnic: updateData.receiverCnic ?? null,
+                receiverPhone: updateData.receiverPhone ?? null,
+            }
+            if (updateData.deliveryStatusText !== undefined) {
+                updatePayload.deliveryStatusText = updateData.deliveryStatusText || null
+            }
+
             const updatedShipment = await tx.deliverySheetShipment.update({
                 where: { id: shipmentId },
-                data: {
-                    deliveryStatus: updateData.deliveryStatus as any,
-                    deliveryRemarks: updateData.deliveryRemarks,
-                    deliveredAt: updateData.deliveryStatus === 'DELIVERED' ? new Date() : null,
-                }
+                data: updatePayload
             });
 
-            // Update booking status based on delivery status
             if (shipment.booking) {
                 let newBookingStatus: BookingStatus;
-
-                switch (updateData.deliveryStatus) {
-                    case 'DELIVERED':
+                switch (normalizedEnum) {
+                    case DeliveryStatus.DELIVERED:
                         newBookingStatus = BookingStatus.DELIVERED;
                         break;
-                    case 'RETURNED':
+                    case DeliveryStatus.RETURNED:
+                    case DeliveryStatus.REFUSED:
                         newBookingStatus = BookingStatus.RETURNED;
                         break;
                     default:
@@ -348,19 +373,18 @@ export class DeliverySheetsService {
                     where: { id: shipment.booking.id },
                     data: {
                         status: newBookingStatus,
-                        deliveredAt: updateData.deliveryStatus === 'DELIVERED' ? new Date() : null,
+                        deliveredAt: normalizedEnum === DeliveryStatus.DELIVERED ? new Date() : null,
                     }
                 });
 
-                // Log history
                 await tx.bookingHistory.create({
                     data: {
                         bookingId: shipment.booking.id,
-                        action: `DELIVERY_${updateData.deliveryStatus}`,
+                        action: `DELIVERY_${normalizedEnum}`,
                         oldStatus: shipment.booking.status,
                         newStatus: newBookingStatus,
                         performedBy: userId,
-                        remarks: updateData.deliveryRemarks || `Marked as ${updateData.deliveryStatus}`
+                        remarks: updateData.deliveryRemarks || (statusText ? `Status: ${statusText}` : `Marked as ${normalizedEnum}`)
                     }
                 });
             }

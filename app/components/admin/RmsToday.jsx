@@ -10,9 +10,7 @@ import {
   Package,
   DollarSign,
   Weight,
-  CreditCard,
-  Wallet,
-  ArrowRight
+  Wallet
 } from 'lucide-react'
 
 export default function RmsToday() {
@@ -147,9 +145,7 @@ export default function RmsToday() {
             <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Pay Mode Distribution</h3>
             <div className="space-y-4">
               {[
-                { label: 'CASH', icon: CreditCard, color: 'sky', count: summary.payModeBreakdown.CASH, rev: summary.revenueBreakdown.CASH },
-                { label: 'COD (Cash On Delivery)', icon: Wallet, color: 'emerald', count: summary.payModeBreakdown.COD, rev: summary.revenueBreakdown.COD },
-                { label: 'ONLINE', icon: ArrowRight, color: 'amber', count: summary.payModeBreakdown.ONLINE, rev: summary.revenueBreakdown.ONLINE },
+                { label: 'COD (Cash On Delivery)', icon: Wallet, color: 'emerald', count: summary.totalBookings ?? 0, rev: summary.totalRevenue ?? 0 },
               ].map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
                   <div className="flex items-center gap-4">

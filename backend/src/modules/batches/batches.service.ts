@@ -229,9 +229,9 @@ export class BatchesService {
         });
     }
 
-    async findAll(userId: string, date?: string) {
+    async findAll(userId: string, date?: string, limit?: number, page: number = 1) {
         const where: any = {
-            staffId: userId // Filter by user
+            staffId: userId
         };
         if (date) {
             const startOfDay = new Date(date);
@@ -243,17 +243,30 @@ export class BatchesService {
                 lte: endOfDay
             };
         }
-        return this.prisma.batch.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            include: {
-                staff: {
-                    select: {
-                        staffCode: true
+        const take = limit != null ? limit : undefined;
+        const skip = take != null ? (page - 1) * take : undefined;
+
+        const [data, total] = await Promise.all([
+            this.prisma.batch.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take,
+                skip,
+                include: {
+                    staff: {
+                        select: {
+                            staffCode: true
+                        }
                     }
                 }
-            }
-        });
+            }),
+            this.prisma.batch.count({ where })
+        ]);
+
+        if (take != null) {
+            return { data, total, page, limit: take, totalPages: Math.ceil(total / take) };
+        }
+        return data;
     }
 
     async findOne(id: string) {

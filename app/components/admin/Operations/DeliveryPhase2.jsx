@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Package, Loader2, CheckCircle, X, ArrowLeft, Truck, User, Phone, MapPin, Calendar } from 'lucide-react'
+import { Search, Package, Loader2, CheckCircle, X, ArrowLeft, Truck, User, Phone, MapPin, Calendar, Printer, Save } from 'lucide-react'
 import { api } from '../../../lib/api'
+import { printDeliverySheetPhase2Report } from '../../../lib/deliverySheetPrint'
 
 export default function DeliveryPhase2({ setActivePage }) {
   const [isLoading, setIsLoading] = useState(false)
@@ -11,6 +12,7 @@ export default function DeliveryPhase2({ setActivePage }) {
   const [sheetNumber, setSheetNumber] = useState('')
   const [sheetData, setSheetData] = useState(null)
   const [shipmentStatuses, setShipmentStatuses] = useState({})
+  const [savingBookingId, setSavingBookingId] = useState(null)
 
   const handleSearchSheet = async () => {
     if (!sheetNumber.trim()) {
@@ -25,15 +27,18 @@ export default function DeliveryPhase2({ setActivePage }) {
       const data = result?.data || result
       setSheetData(data)
 
-      // Initialize shipment statuses
+      // Initialize shipment statuses and receiver details
       const initialStatuses = {}
       data.bookings?.forEach(booking => {
         const shipment = data.deliverySheetShipments?.find(s => s.bookingId === booking.id)
         initialStatuses[booking.id] = {
           shipmentId: shipment?.id,
-          status: shipment?.deliveryStatus || 'PENDING',
+          status: shipment?.deliveryStatusText ?? shipment?.deliveryStatus ?? 'PENDING',
           remarks: shipment?.deliveryRemarks || '',
-          collectedAmount: booking.codAmount || 0
+          collectedAmount: booking.codAmount || 0,
+          receiverName: shipment?.receiverName ?? '',
+          receiverCnic: shipment?.receiverCnic ?? '',
+          receiverPhone: shipment?.receiverPhone ?? ''
         }
       })
       setShipmentStatuses(initialStatuses)
@@ -46,41 +51,46 @@ export default function DeliveryPhase2({ setActivePage }) {
     }
   }
 
-  const handleStatusChange = async (bookingId, status) => {
+  const saveRow = async (bookingId) => {
     const shipmentData = shipmentStatuses[bookingId]
-
-    // If no shipmentId exists, we need to create the shipment first
-    if (!shipmentData?.shipmentId) {
-      setError('Cannot update status: Shipment record not found. Please contact support.')
-      return
-    }
-
-    setIsLoading(true)
+    if (!shipmentData?.shipmentId || !sheetData) return
+    setSavingBookingId(bookingId)
     setError('')
     try {
       await api.updateDeliveryShipmentStatus(
         sheetData.id,
         shipmentData.shipmentId,
         {
-          deliveryStatus: status,
-          deliveryRemarks: shipmentData.remarks
+          deliveryStatusText: (shipmentData.status || '').trim() || undefined,
+          deliveryRemarks: shipmentData.remarks,
+          receiverName: shipmentData.receiverName || undefined,
+          receiverCnic: shipmentData.receiverCnic || undefined,
+          receiverPhone: shipmentData.receiverPhone || undefined
         }
       )
-
-      // Update local state
-      setShipmentStatuses(prev => ({
-        ...prev,
-        [bookingId]: { ...prev[bookingId], status }
-      }))
-
-      setSuccess(`Status updated to ${status}`)
+      setSuccess('Saved')
       setTimeout(() => setSuccess(''), 2000)
     } catch (err) {
-      console.error('Error updating status:', err)
-      setError(err.message || 'Failed to update status')
+      console.error('Error saving:', err)
+      setError(err.message || 'Failed to save')
     } finally {
-      setIsLoading(false)
+      setSavingBookingId(null)
     }
+  }
+
+  const saveShipmentReceiver = async (bookingId) => {
+    await saveRow(bookingId)
+  }
+
+  const handleStatusChange = (bookingId, value) => {
+    setShipmentStatuses(prev => ({
+      ...prev,
+      [bookingId]: { ...prev[bookingId], status: value }
+    }))
+  }
+
+  const handleStatusBlur = async (bookingId) => {
+    await saveRow(bookingId)
   }
 
   const handleRemarksChange = (bookingId, remarks) => {
@@ -90,24 +100,30 @@ export default function DeliveryPhase2({ setActivePage }) {
     }))
   }
 
-  const handleSaveRemarks = async (bookingId) => {
-    const shipmentData = shipmentStatuses[bookingId]
-    if (!shipmentData?.shipmentId) return
+  const handleReceiverChange = (bookingId, field, value) => {
+    setShipmentStatuses(prev => ({
+      ...prev,
+      [bookingId]: { ...prev[bookingId], [field]: value }
+    }))
+  }
 
-    try {
-      await api.updateDeliveryShipmentStatus(
-        sheetData.id,
-        shipmentData.shipmentId,
-        {
-          deliveryStatus: shipmentData.status,
-          deliveryRemarks: shipmentData.remarks
-        }
-      )
-      setSuccess('Remarks saved')
-      setTimeout(() => setSuccess(''), 2000)
-    } catch (err) {
-      setError(err.message || 'Failed to save remarks')
-    }
+  const handleReceiverBlur = (bookingId) => {
+    saveShipmentReceiver(bookingId)
+  }
+
+  const handlePrintSheet = () => {
+    const mergedShipments = (sheetData.deliverySheetShipments || []).map(s => ({
+      ...s,
+      deliveryStatus: shipmentStatuses[s.bookingId]?.status ?? s.deliveryStatus,
+      receiverName: shipmentStatuses[s.bookingId]?.receiverName ?? s.receiverName ?? '',
+      receiverCnic: shipmentStatuses[s.bookingId]?.receiverCnic ?? s.receiverCnic ?? '',
+      receiverPhone: shipmentStatuses[s.bookingId]?.receiverPhone ?? s.receiverPhone ?? ''
+    }))
+    const printed = printDeliverySheetPhase2Report(
+      { ...sheetData, deliverySheetShipments: mergedShipments },
+      {}
+    )
+    if (!printed) setError('Allow popups to print the sheet.')
   }
 
   const handleCloseSheet = async () => {
@@ -129,22 +145,9 @@ export default function DeliveryPhase2({ setActivePage }) {
     }
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'DELIVERED':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-      case 'RETURNED':
-        return 'bg-red-50 text-red-700 border-red-200'
-      case 'REFUSED':
-        return 'bg-orange-50 text-orange-700 border-orange-200'
-      default:
-        return 'bg-gray-50 text-gray-700 border-gray-200'
-    }
-  }
-
   const totalCollected = sheetData?.bookings?.reduce((sum, booking) => {
-    const status = shipmentStatuses[booking.id]?.status
-    if (status === 'DELIVERED' && booking.codAmount) {
+    const status = (shipmentStatuses[booking.id]?.status || '').toUpperCase()
+    if (status.includes('DELIVERED') && booking.codAmount) {
       return sum + Number(booking.codAmount)
     }
     return sum
@@ -239,8 +242,8 @@ export default function DeliveryPhase2({ setActivePage }) {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="overflow-x-auto overflow-y-visible">
+              <table className="w-full text-left" style={{ minWidth: '1280px' }}>
                 <thead className="bg-gray-50/80 sticky top-0 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
                   <tr>
                     <th className="px-6 py-4">SR</th>
@@ -251,6 +254,9 @@ export default function DeliveryPhase2({ setActivePage }) {
                     <th className="px-6 py-4 text-center">WGT</th>
                     <th className="px-6 py-4 text-center">COD</th>
                     <th className="px-6 py-4">STATUS</th>
+                    <th className="px-6 py-4">RECEIVER NAME</th>
+                    <th className="px-6 py-4">RECEIVER CNIC</th>
+                    <th className="px-6 py-4">RECEIVER PHONE</th>
                     <th className="px-6 py-4">REMARKS</th>
                     <th className="px-6 py-4 text-center">ACTION</th>
                   </tr>
@@ -258,7 +264,7 @@ export default function DeliveryPhase2({ setActivePage }) {
                 <tbody className="divide-y divide-gray-50">
                   {sheetData.bookings?.length === 0 ? (
                     <tr>
-                      <td colSpan="10" className="py-24 px-10 text-center">
+                      <td colSpan="13" className="py-24 px-10 text-center">
                         <Package className="w-12 h-12 text-gray-100 mx-auto mb-4" />
                         <p className="text-sm font-black text-gray-300 uppercase tracking-widest">No shipments</p>
                       </td>
@@ -280,30 +286,72 @@ export default function DeliveryPhase2({ setActivePage }) {
                           <td className="px-6 py-4 text-center text-xs font-bold text-gray-600">{booking.weight} KG</td>
                           <td className="px-6 py-4 text-center text-xs font-bold text-emerald-600">{booking.codAmount || 0}</td>
                           <td className="px-6 py-4">
-                            <select
-                              value={shipmentStatus.status || 'PENDING'}
+                            <input
+                              type="text"
+                              value={shipmentStatus.status || ''}
                               onChange={(e) => handleStatusChange(booking.id, e.target.value)}
-                              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 outline-none ${getStatusColor(shipmentStatus.status)}`}
-                            >
-                              <option value="PENDING">Pending</option>
-                              <option value="DELIVERED">Delivered</option>
-                              <option value="RETURNED">Returned</option>
-                              <option value="REFUSED">Refused</option>
-                            </select>
+                              onBlur={() => handleStatusBlur(booking.id)}
+                              placeholder="Enter status (e.g. Delivered, Returned)"
+                              className="w-full min-w-[120px] px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-6 py-4">
+                            <input
+                              type="text"
+                              value={shipmentStatus.receiverName || ''}
+                              onChange={(e) => handleReceiverChange(booking.id, 'receiverName', e.target.value)}
+                              onBlur={() => handleReceiverBlur(booking.id)}
+                              placeholder="Receiver name"
+                              className="w-full min-w-[100px] px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-6 py-4">
+                            <input
+                              type="text"
+                              value={shipmentStatus.receiverCnic || ''}
+                              onChange={(e) => handleReceiverChange(booking.id, 'receiverCnic', e.target.value)}
+                              onBlur={() => handleReceiverBlur(booking.id)}
+                              placeholder="Receiver CNIC"
+                              className="w-full min-w-[100px] px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-6 py-4">
+                            <input
+                              type="text"
+                              value={shipmentStatus.receiverPhone || ''}
+                              onChange={(e) => handleReceiverChange(booking.id, 'receiverPhone', e.target.value)}
+                              onBlur={() => handleReceiverBlur(booking.id)}
+                              placeholder="Receiver phone"
+                              className="w-full min-w-[90px] px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
+                            />
                           </td>
                           <td className="px-6 py-4">
                             <input
                               type="text"
                               value={shipmentStatus.remarks || ''}
                               onChange={(e) => handleRemarksChange(booking.id, e.target.value)}
-                              placeholder="Add remarks..."
+                              placeholder="Remarks..."
                               className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none"
                             />
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            {shipmentStatus.status === 'DELIVERED' && (
-                              <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto" />
-                            )}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => saveRow(booking.id)}
+                                disabled={!shipmentStatus.shipmentId || savingBookingId === booking.id}
+                                title="Save row"
+                                className="p-2 bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {savingBookingId === booking.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Save className="w-4 h-4" />
+                                )}
+                              </button>
+                              {(shipmentStatus.status || '').toUpperCase().includes('DELIVERED') && (
+                                <CheckCircle className="w-5 h-5 text-emerald-600" title="Delivered" />
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -314,8 +362,15 @@ export default function DeliveryPhase2({ setActivePage }) {
             </div>
           </div>
 
-          {/* Close Sheet Button */}
-          <div className="flex justify-end">
+          {/* Print Sheet & Close Sheet Buttons */}
+          <div className="flex justify-end gap-4">
+            <button
+              onClick={handlePrintSheet}
+              className="px-8 py-4 bg-sky-600 text-white rounded-xl hover:bg-sky-700 font-black text-sm uppercase tracking-widest shadow-lg shadow-sky-600/20 transition-all active:scale-95 flex items-center gap-2"
+            >
+              <Printer className="w-5 h-5" />
+              PRINT SHEET
+            </button>
             <button
               onClick={handleCloseSheet}
               disabled={isLoading}

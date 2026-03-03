@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useSelector } from 'react-redux'
-import { Search, Package, MapPin, Truck, CheckCircle, Clock, AlertCircle, Loader2, Edit, Save, X, FileText, Calendar, User, Phone, DollarSign, MessageSquare } from 'lucide-react'
+import { Search, Package, MapPin, Truck, CheckCircle, Clock, AlertCircle, Loader2, Edit, Save, X, Calendar, User, Phone, DollarSign, MessageSquare } from 'lucide-react'
 import { api } from '../../../lib/api'
 
 /** Map backend Booking + bookingHistory to ShipmentTracking UI format */
@@ -67,22 +67,6 @@ function transformBookingToTrackingData(booking) {
     }
   }
 
-  const linkedDocuments = []
-  if (b.manifest?.manifestCode) {
-    linkedDocuments.push({
-      type: 'Manifest',
-      id: b.manifest.manifestCode,
-      date: b.manifest.manifestDate ? new Date(b.manifest.manifestDate).toLocaleDateString() : ''
-    })
-  }
-  if (b.deliverySheet?.sheetNumber) {
-    linkedDocuments.push({
-      type: 'Delivery Sheet',
-      id: b.deliverySheet.sheetNumber,
-      date: b.deliverySheet.sheetDate ? new Date(b.deliverySheet.sheetDate).toLocaleDateString() : ''
-    })
-  }
-
   const remarksFromHistory = history
     .filter(h => h.remarks)
     .map(h => ({
@@ -119,8 +103,7 @@ function transformBookingToTrackingData(booking) {
     estimatedDelivery: b.preferredDeliveryDate ? new Date(b.preferredDeliveryDate).toISOString().split('T')[0] : null,
     weight: weightVal != null ? `${weightVal} kg` : '—',
     pieces: b.pieces ?? '—',
-    remarks: remarksFromHistory,
-    linkedDocuments
+    remarks: remarksFromHistory
   }
 }
 
@@ -696,29 +679,6 @@ export default function ShipmentTracking() {
             </div>
           )}
 
-          {/* Linked Documents */}
-          {trackingData.linkedDocuments && trackingData.linkedDocuments.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Linked Documents</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {trackingData.linkedDocuments.map((doc, index) => (
-                  <div key={index} className="bg-sky-50 rounded-md p-4 border border-sky-200 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-sky-600" />
-                      <div>
-                        <p className="font-medium text-gray-900">{doc.type}</p>
-                        <p className="text-sm text-gray-600">{doc.id}</p>
-                        <p className="text-xs text-gray-500">{doc.date}</p>
-                      </div>
-                    </div>
-                    <button className="px-3 py-1 bg-sky-600 text-white text-xs rounded hover:bg-sky-700">
-                      View
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

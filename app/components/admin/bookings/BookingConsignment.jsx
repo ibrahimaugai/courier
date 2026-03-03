@@ -1029,7 +1029,18 @@ export default function BookingConsignment() {
         isSubmitting={isSubmitting}
         attestationInfo={attestationInfo}
         onPrintCN={async () => {
-          const citiesMap = (cities || []).reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+          if (!formData.product || !formData.destination || !formData.services || !formData.payMode ||
+            !formData.weight || !formData.packetContent || !formData.mobileNumber || !formData.fullName ||
+            !formData.address || !formData.consigneeMobileNumber || !formData.consigneeFullName ||
+            !formData.consigneeAddress) {
+            setToast({ isVisible: true, message: 'Please fill all required fields', type: 'error' })
+            return
+          }
+          const citiesArr = cities || []
+          const citiesMap = citiesArr.reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+          const citiesById = citiesArr.reduce((acc, c) => { acc[c.id] = c; return acc }, {})
+          const originCityObj = formData.originCity && citiesById[formData.originCity]
+          const destCityObj = formData.destination && citiesById[formData.destination]
           const draft = {
             cnNumber: formData.cnNumber || 'TBD',
             fullName: formData.fullName,
@@ -1042,8 +1053,14 @@ export default function BookingConsignment() {
             destinationCityId: formData.destination,
             productId: formData.product,
             serviceId: formData.services,
-            originCity: formData.originCity ? { cityName: citiesMap[formData.originCity] || formData.originCity } : null,
-            destinationCity: formData.destination ? { cityName: citiesMap[formData.destination] || formData.destination } : null,
+            originCity: formData.originCity ? {
+              cityName: citiesMap[formData.originCity] || formData.originCity,
+              cityCode: originCityObj?.cityCode || originCityObj?.code || null
+            } : null,
+            destinationCity: formData.destination ? {
+              cityName: citiesMap[formData.destination] || formData.destination,
+              cityCode: destCityObj?.cityCode || destCityObj?.code || null
+            } : null,
             product: formData.product ? { productName: formData.product } : null,
             service: formData.services ? { serviceName: formData.services } : null,
             pieces: formData.pieces,
@@ -1062,6 +1079,12 @@ export default function BookingConsignment() {
               ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
               : '',
             remarks: formData.remarks || '',
+            subserviceNames: (selectedSubservices?.length && formData.services)
+              ? (subservicesData[formData.services] || [])
+                  .filter((s) => selectedSubservices.includes(s.id))
+                  .map((s) => s.name)
+                  .filter(Boolean)
+              : undefined,
           }
           let config = {}
           try {
@@ -1075,6 +1098,7 @@ export default function BookingConsignment() {
           } else {
             printBookingSlip(draft, { config })
           }
+          setTimeout(() => handleSubmit({ preventDefault: () => {} }), 2000)
         }}
       />
 

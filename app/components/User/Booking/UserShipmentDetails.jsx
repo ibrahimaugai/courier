@@ -420,23 +420,14 @@ export default function UserShipmentDetails({
               )}
             </div>
 
-            {/* Pay Mode */}
+            {/* Pay Mode - Customer portal: always Cash, no option to change */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Pay Mode <span className="text-red-500">*</span>
+                Pay Mode
               </label>
-              <select
-                name="payMode"
-                value={formData.payMode}
-                onChange={handleInputChange}
-                required
-                disabled={isReadOnly}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors disabled:bg-gray-100"
-              >
-                <option value="" disabled>Select Payment Mode</option>
-                <option value="Cash">Cash</option>
-                <option value="Online">Online</option>
-              </select>
+              <div className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700">
+                Cash
+              </div>
             </div>
 
             {/* Volumetric Weight */}

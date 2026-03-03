@@ -428,12 +428,16 @@ enum DeliveryPhase {
 }
 
 model DeliverySheetShipment {
-  id              String         @id @default(uuid())
-  deliverySheetId String         @map("delivery_sheet_id")
-  bookingId       String?        @map("booking_id")
-  deliveryStatus  DeliveryStatus @default(PENDING) @map("delivery_status")
-  deliveredAt     DateTime?      @map("delivered_at")
-  deliveryRemarks String?        @map("delivery_remarks")
+  id                  String         @id @default(uuid())
+  deliverySheetId     String         @map("delivery_sheet_id")
+  bookingId           String?        @map("booking_id")
+  deliveryStatus      DeliveryStatus @default(PENDING) @map("delivery_status")
+  deliveryStatusText  String?        @map("delivery_status_text")
+  deliveredAt         DateTime?      @map("delivered_at")
+  deliveryRemarks     String?        @map("delivery_remarks")
+  receiverName        String?        @map("receiver_name")
+  receiverCnic        String?        @map("receiver_cnic")
+  receiverPhone       String?        @map("receiver_phone")
 
   // Relations
   deliverySheet DeliverySheet @relation(fields: [deliverySheetId], references: [id], onDelete: Cascade)
@@ -448,6 +452,8 @@ enum DeliveryStatus {
   PENDING
   DELIVERED
   NOT_DELIVERED
+  RETURNED
+  REFUSED
 }
 
 // ============================================
