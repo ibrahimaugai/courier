@@ -155,10 +155,29 @@ export class UsersService {
       await this.prisma.user.delete({ where: { id } });
       return { deleted: true, id };
     } catch (error: any) {
+      // If there are foreign key constraints (associated records), we can't physically
+      // remove the row without breaking history, so we "hard deactivate" + anonymize
+      // the user instead. This keeps all related records intact, but the account is
+      // effectively removed from use.
       if (error?.code === 'P2003' || error?.message?.includes('foreign key')) {
-        throw new BadRequestException(
-          'Cannot delete: this user has associated records. Deactivate the user instead.',
-        );
+        const timestamp = Date.now();
+        const anonymizedUsername = `${user.username || 'deleted-user'}-${timestamp}`;
+
+        await this.prisma.user.update({
+          where: { id },
+          data: {
+            isActive: false,
+            username: anonymizedUsername,
+            email: user.email ? null : user.email,
+            staffCode: user.staffCode ? `${user.staffCode}-DEL` : user.staffCode,
+          },
+        });
+
+        return {
+          deleted: true,
+          id,
+          anonymized: true,
+        };
       }
       throw error;
     }

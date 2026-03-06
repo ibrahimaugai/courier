@@ -233,10 +233,10 @@ export function printBookingSlip(booking, options = {}) {
   <meta charset="utf-8">
   <title>Booking Slip - ${escapeHtml(cnDisplay)}</title>
   <style>
-    @page { size: A4 landscape; margin: 10mm; }
+    @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; color: #111; font-size: 10px; line-height: 1.35; }
-    .page { width: 297mm; min-height: 210mm; padding: 8mm; margin: 0 auto; display: flex; flex-direction: row; gap: 12px; }
+    .page { width: 210mm; min-height: 297mm; padding: 8mm; margin: 0 auto; display: flex; flex-direction: row; gap: 12px; }
     .half { flex: 1; min-width: 0; border: 1px solid #333; padding: 10px 12px; background: #fff; }
     .slip-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #333; flex-wrap: wrap; }
     .logo-row { flex-shrink: 0; }
