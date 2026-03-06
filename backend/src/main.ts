@@ -16,8 +16,16 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
 
-  // CORS - Allow all origins for development
-  const corsOrigins = configService.get<string>('CORS_ORIGIN')?.split(',') || ['*'];
+  // CORS - Allow configured origins (plus public website for tracking widget)
+  const corsEnv = configService.get<string>('CORS_ORIGIN');
+  const defaultOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'https://operations.nps.com.pk',
+    'https://nps.com.pk',
+    'https://nps.com.pk/track-your-shipment/',
+  ];
+  const corsOrigins = corsEnv ? corsEnv.split(',') : defaultOrigins;
   app.enableCors({
     origin: corsOrigins.includes('*') ? true : corsOrigins,
     credentials: true,
