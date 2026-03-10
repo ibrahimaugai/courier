@@ -134,7 +134,10 @@ export function printBookingSlip(booking, options = {}) {
       <div class="slip-top">
         <div class="logo-row">${logoBlockContent}</div>
         <div class="copy-type">${escapeHtml(copyLabel)}</div>
-        <div class="barcode-wrap"><svg id="${escapeHtml(barcodeId)}" class="cn-barcode"></svg></div>
+        <div class="tracking-row">
+          <div class="tracking-label">Tracking ID</div>
+          <div class="barcode-wrap"><svg id="${escapeHtml(barcodeId)}" class="cn-barcode"></svg></div>
+        </div>
       </div>
 
       <table class="grid-table">
@@ -181,7 +184,10 @@ export function printBookingSlip(booking, options = {}) {
         <div class="section-title">Item Details</div>
         <table class="doc-table">
           <tr><th>Description</th><th>Qty</th></tr>
-          <tr><td>${escapeHtml(b.subserviceNames.join(', '))}</td><td>${escapeHtml(pieces)}</td></tr>
+          <tr>
+            <td>${b.subserviceNames.map((n) => `<div>${escapeHtml(n)}</div>`).join('')}</td>
+            <td>1</td>
+          </tr>
         </table>
       </div>`
         : ''}
@@ -216,13 +222,14 @@ export function printBookingSlip(booking, options = {}) {
 
       ${preferredDeliveryLine ? `<div class="section">${preferredDeliveryLine}</div>` : ''}
 
-      <div class="slip-footer">
-        <div class="footer-left">Helpline: ${escapeHtml(helpline)}</div>
-        <div class="footer-right">Website: ${escapeHtml(website)}</div>
-      </div>
       <div class="signature-block">
         <div class="signature-label">Customer Signature:</div>
         <div class="signature-placeholder"></div>
+      </div>
+
+      <div class="slip-footer">
+        <div class="footer-left">Helpline: ${escapeHtml(helpline)}</div>
+        <div class="footer-right">Website: ${escapeHtml(website)}</div>
       </div>
 
     </div>`
@@ -250,6 +257,10 @@ export function printBookingSlip(booking, options = {}) {
     .cn-label { font-weight: 700; }
     .cn-value { font-weight: 900; font-size: 14px; letter-spacing: 0.05em; }
     .copy-type { font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .tracking-row { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .tracking-label { font-weight: 800; font-size: 9px; white-space: nowrap; }
+    .tracking-row { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .tracking-label { font-size: 9px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
     .barcode-wrap { min-height: 36px; }
     .cn-barcode { display: block; }
     .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
@@ -268,9 +279,9 @@ export function printBookingSlip(booking, options = {}) {
     .remarks-box { min-height: 20px; font-size: 9px; }
     .remarks-instructions-row { display: flex; gap: 16px; }
     .remarks-col, .instructions-col { flex: 1; min-width: 0; }
-    .shipper-consignee-row { display: flex; gap: 16px; }
+    .shipper-consignee-row { display: flex; flex-direction: column; gap: 8px; }
     .shipper-col, .consignee-col { flex: 1; min-width: 0; border: 1px solid #333; padding: 8px; }
-    .slip-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #333; font-size: 8px; margin-top: 6px; }
+    .slip-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; font-size: 8px; margin-top: 6px; }
     .footer-left { text-align: left; }
     .footer-right { text-align: right; }
     .signature-block { margin-top: 16px; width: 100%; }

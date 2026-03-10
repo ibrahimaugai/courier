@@ -32,6 +32,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
   const dispatch = useDispatch()
   const { user, batchInfo } = useSelector((state) => state.auth)
   const isConfigMissing = batchInfo?.status === 'error'
+  const portalLabel = user?.role === 'SUPER_ADMIN' ? 'Admin Panel' : 'Employee Portal'
 
   const handleLogout = () => {
     dispatch(logout())
@@ -95,7 +96,7 @@ export default function AdminSidebar({ activePage, setActivePage }) {
             className="h-16 w-auto object-contain"
           />
           <div className="mt-2 text-center">
-            <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">Employee Portal</span>
+            <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600">{portalLabel}</span>
           </div>
         </div>
       </div>

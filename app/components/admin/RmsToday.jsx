@@ -228,6 +228,8 @@ export default function RmsToday() {
               <tbody className="divide-y divide-gray-100">
                 {bookings.map((booking) => {
                   const isVoided = booking.status === 'VOIDED'
+                  const rawAmount = booking.totalAmount ?? booking.total ?? booking.amount
+                  const amountNum = rawAmount != null ? Number(rawAmount) : null
                   return (
                   <tr key={booking.id} className={`transition-colors group cursor-default ${isVoided ? 'bg-red-50/50 hover:bg-red-50/70' : 'hover:bg-sky-50/40'}`}>
                     <td className="px-8 py-5 whitespace-nowrap">
@@ -277,7 +279,11 @@ export default function RmsToday() {
                       {isVoided ? (
                         <span className="text-red-600 font-black uppercase">Void</span>
                       ) : (
-                        <span className="text-gray-900">{parseFloat(booking.totalAmount).toLocaleString()}</span>
+                        amountNum != null && Number.isFinite(amountNum) ? (
+                          <span className="text-gray-900">Rs. {amountNum.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-gray-400 font-medium">—</span>
+                        )
                       )}
                     </td>
                   </tr>
