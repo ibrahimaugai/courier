@@ -62,7 +62,7 @@ export class ConsignmentsController {
         pieces: { type: 'number' },
         handlingInstructions: { type: 'string' },
         packetContent: { type: 'string' },
-        payMode: { type: 'string', enum: ['PREPAID', 'COD', 'TOPAY'] },
+        payMode: { type: 'string', enum: ['CASH', 'COD', 'ONLINE', 'ACCOUNT'] },
         volumetricWeight: { type: 'number' },
         weight: { type: 'number' },
         mobileNumber: { type: 'string' },
@@ -108,6 +108,7 @@ export class ConsignmentsController {
     )
     files?: Array<Express.Multer.File>,
   ) {
+    console.log('--- Creating consignment ---', createConsignmentDto.payMode);
     // Documents are parsed by DTO Transform decorator
 
     return this.consignmentsService.createConsignment(

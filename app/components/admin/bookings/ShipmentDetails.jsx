@@ -70,7 +70,7 @@ export default function ShipmentDetails({
   // Get available services for the selected product
   const availableServices = useMemo(() => {
     if (!services || !Array.isArray(services) || !formData.product) return []
-    
+
     // For General product: General services + Blue Box tiers + all attestation services
     if (formData.product === 'General') {
       const fromDb = services
@@ -82,7 +82,7 @@ export default function ShipmentDetails({
       const attestationOptions = ATTESTATION_SERVICE_VALUES.map(name => ({ value: name, label: name }))
       return [...fromDb, ...blueBoxOptions, ...attestationOptions]
     }
-    
+
     // Regular services for other products
     return services
       .filter(s => s.serviceType === formData.product)
@@ -439,7 +439,7 @@ export default function ShipmentDetails({
                 >
                   <option value="" disabled>Select Payment Mode</option>
                   <option value="Cash">Cash</option>
-                  <option value="Online">Online</option>
+                  <option value="Account">Account</option>
                 </select>
               </div>
 

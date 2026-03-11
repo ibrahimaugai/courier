@@ -5,7 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createUserDto: CreateUserDto) {
     return this.prisma.user.create({
@@ -60,7 +60,7 @@ export class UsersService {
   /**
    * Approve a customer (set isActive: true). SUPER_ADMIN only.
    */
-  async approveCustomer(id: string) {
+  async approveCustomer(id: string, staffCode: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -68,14 +68,23 @@ export class UsersService {
     if (user.role !== 'USER') {
       throw new BadRequestException('Can only approve customer (USER role) accounts');
     }
+
+    if (!staffCode) {
+      throw new BadRequestException('Customer ID (staffCode) is required for approval');
+    }
+
     return this.prisma.user.update({
       where: { id },
-      data: { isActive: true },
+      data: {
+        isActive: true,
+        staffCode: staffCode
+      },
       select: {
         id: true,
         username: true,
         email: true,
         role: true,
+        staffCode: true,
         isActive: true,
         updatedAt: true,
       },

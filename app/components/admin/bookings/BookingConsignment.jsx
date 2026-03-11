@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Edit, Sparkles, X, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Edit, Sparkles, X, Loader2, CheckCircle, AlertCircle, Search } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { printBookingSlip, printCodSlip } from '../../../lib/bookingSlipPrint'
 import Toast from '../../Toast'
@@ -33,6 +33,10 @@ export default function BookingConsignment() {
   const [subservicesData, setSubservicesData] = useState({}) // Cache subservices by service name
   const [attestationInfo, setAttestationInfo] = useState({ days: null, addPageRate: null })
   const [cnAllocationError, setCnAllocationError] = useState('')
+  const [showUserModal, setShowUserModal] = useState(false)
+  const [users, setUsers] = useState([])
+  const [selectedAccountUser, setSelectedAccountUser] = useState(null)
+  const [userSearchTerm, setUserSearchTerm] = useState('')
   const dispatch = useDispatch()
   const { user } = useSelector((state) => state.auth)
   const { cities, rules: reduxRules, services: reduxServices } = useSelector((state) => state.pricing)
@@ -84,6 +88,7 @@ export default function BookingConsignment() {
     codAmount: '',
     rate: '',
     totalAmount: 0,
+    dcReferenceNo: '',
     customerRef: '',
     batchId: '',
     batchCode: '',
@@ -265,7 +270,7 @@ export default function BookingConsignment() {
     const pieces = parseInt(formData.pieces || '1')
     const { documents } = getSelectedDocuments()
     const documentTotal = documents.reduce((sum, doc) => sum + doc.price, 0)
-    
+
     // Calculate subservices total for Attestation services (by service name; product can be General)
     let subservicesTotal = 0
     if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && selectedSubservices.length > 0 && formData.services) {
@@ -275,7 +280,7 @@ export default function BookingConsignment() {
         return total + (subservice ? subservice.price : 0)
       }, 0)
     }
-    
+
     // otherAmount is for manual entry, subservicesTotal is calculated from selected subservices
     const otherAmount = parseFloat(formData.otherAmount || '0')
 
@@ -307,7 +312,7 @@ export default function BookingConsignment() {
     setFormData(prev => ({
       ...prev,
       rate: finalRate.toString(),
-      totalAmount: totalAmount
+      totalAmount: formData.payMode === 'Account' ? 0 : totalAmount
     }))
   }, [
     formData.product,
@@ -341,6 +346,19 @@ export default function BookingConsignment() {
         ...prev,
         [name]: value
       }
+      // When Account is selected, fetch users if not already fetched and open modal
+      if (name === 'payMode' && value === 'Account') {
+        setShowUserModal(true)
+        if (users.length === 0) {
+          api.getUsers()
+            .then(data => {
+              const allUsers = Array.isArray(data) ? data : (data?.data || [])
+              // Only users with role 'USER'
+              setUsers(allUsers.filter(u => u.role === 'USER' && u.isActive))
+            })
+            .catch(err => console.error('Error fetching users:', err))
+        }
+      }
       // Reset services and otherAmount when product changes
       if (name === 'product') {
         updated.services = ''
@@ -369,22 +387,22 @@ export default function BookingConsignment() {
 
     // Handle Attestation services (shown under General) - show subservices modal
     if (service && ATTESTATION_SERVICE_VALUES.includes(service)) {
-        // Fetch subservices if not already cached
-        if (!subservicesData[service]) {
-          api.getSubservices(service)
-            .then((data) => {
-              const subservices = Array.isArray(data) ? data : data?.data || []
-              setSubservicesData((prev) => ({
-                ...prev,
-                [service]: subservices,
-              }))
-            })
-            .catch((err) => {
-              console.error('Error fetching subservices:', err)
-            })
-        }
-        setShowSubservicesModal(true)
-        return
+      // Fetch subservices if not already cached
+      if (!subservicesData[service]) {
+        api.getSubservices(service)
+          .then((data) => {
+            const subservices = Array.isArray(data) ? data : data?.data || []
+            setSubservicesData((prev) => ({
+              ...prev,
+              [service]: subservices,
+            }))
+          })
+          .catch((err) => {
+            console.error('Error fetching subservices:', err)
+          })
+      }
+      setShowSubservicesModal(true)
+      return
     }
 
     // Only open modal if a document-requiring service is selected
@@ -404,6 +422,22 @@ export default function BookingConsignment() {
       setShowNationalBureauModal(true)
     }
   }, [formData.services, formData.product])
+
+  const handleUserSelect = (selectedUser) => {
+    setSelectedAccountUser(selectedUser)
+    setFormData(prev => ({
+      ...prev,
+      fullName: selectedUser.username, // Using username as name
+      mobileNumber: selectedUser.phone || '', // May be empty if not in User model
+      dcReferenceNo: selectedUser.staffCode || selectedUser.username,
+    }))
+    setShowUserModal(false)
+  }
+
+  const filteredUsers = users.filter(u =>
+  (u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+    u.staffCode?.toLowerCase().includes(userSearchTerm.toLowerCase()))
+  )
 
   const handleOpenDocumentModal = (modalType) => {
     switch (modalType) {
@@ -814,7 +848,7 @@ export default function BookingConsignment() {
       const baseRate = parseFloat(formData.rate || '0')
 
       // Calculate final total correctly: (Rate * Pieces) + Documents + Others
-      const totalAmount = (baseRate * pieces) + documentTotal + otherAmount
+      const totalAmount = formData.payMode === 'Account' ? 0 : (baseRate * pieces) + documentTotal + otherAmount
 
       // Determine chargeable weight
       const chargeableWeight = Math.max(parseFloat(formData.weight || '0'), parseFloat(formData.volumetricWeight || '0'))
@@ -841,9 +875,10 @@ export default function BookingConsignment() {
           ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
           : undefined,
         packetContent: formData.packetContent,
-        payMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE', // Map to PaymentMode enum
+        payMode: formData.payMode === 'Cash' ? 'CASH' : (formData.payMode === 'Account' ? 'ACCOUNT' : 'ONLINE'), // Map to PaymentMode enum
         preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
         preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
+        dcReferenceNo: formData.dcReferenceNo || undefined,
         volumetricWeight: parseFloat(formData.volumetricWeight || '0') || undefined,
         weight: parseFloat(formData.weight),
         chargeableWeight: chargeableWeight,
@@ -873,7 +908,6 @@ export default function BookingConsignment() {
         otherAmount: otherAmount || undefined,
         totalAmount: totalAmount,
         codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
-        dcReferenceNo: formData.customerRef || undefined,
 
         // Documents
         documents: documents.length > 0 ? documents : undefined,
@@ -1074,23 +1108,23 @@ export default function BookingConsignment() {
             preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
             codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
             customerRef: formData.customerRef || '',
-            dcReferenceNo: formData.customerRef || undefined,
+            dcReferenceNo: formData.dcReferenceNo || formData.customerRef || undefined,
             handlingInstructions: (formData.handlingInstructions || formData.remarks)
               ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
               : '',
             remarks: formData.remarks || '',
             subserviceNames: (selectedSubservices?.length && formData.services)
               ? (subservicesData[formData.services] || [])
-                  .filter((s) => selectedSubservices.includes(s.id))
-                  .map((s) => s.name)
-                  .filter(Boolean)
+                .filter((s) => selectedSubservices.includes(s.id))
+                .map((s) => s.name)
+                .filter(Boolean)
               : undefined,
           }
           let config = {}
           try {
             const res = await api.getConfiguration()
             config = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null) ?? {}
-          } catch (_) {}
+          } catch (_) { }
           config.staffCode = config.staffCode ?? user?.staffCode
           config.username = config.username ?? config.updatedByUser?.username ?? user?.username
           if (formData.product === 'COD') {
@@ -1098,7 +1132,7 @@ export default function BookingConsignment() {
           } else {
             printBookingSlip(draft, { config })
           }
-          setTimeout(() => handleSubmit({ preventDefault: () => {} }), 2000)
+          setTimeout(() => handleSubmit({ preventDefault: () => { } }), 2000)
         }}
       />
 
@@ -1866,6 +1900,72 @@ export default function BookingConsignment() {
           }))
         }}
       />
+      {/* User Selection Modal (for ACCOUNT pay mode) */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200">
+            {/* Modal Header */}
+            <div className="bg-sky-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">Select Account User</h3>
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="text-white hover:bg-white/20 p-1 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Search */}
+            <div className="p-4 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search by username or staff code..."
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="max-h-[400px] overflow-y-auto p-4">
+              {filteredUsers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 italic">
+                  No users found matching your search.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {filteredUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleUserSelect(u)}
+                      className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-sky-500 hover:bg-sky-50 transition-all text-left"
+                    >
+                      <div>
+                        <div className="font-bold text-gray-900">{u.username}</div>
+                        <div className="text-sm text-gray-500">Code: {u.staffCode || 'N/A'}</div>
+                      </div>
+                      <div className="text-sky-600 font-medium">Select →</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-200">
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 bg-white rounded-md hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

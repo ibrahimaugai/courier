@@ -9,6 +9,7 @@ import {
   ValidateNested,
   IsEmail,
   Min,
+  IsIn,
 } from 'class-validator';
 import { Type, Transform, Expose } from 'class-transformer';
 import { PaymentMode } from '@prisma/client';
@@ -86,9 +87,11 @@ export class CreateConsignmentDto {
   @IsNotEmpty()
   packetContent: string;
 
-  @ApiProperty({ example: 'CASH', enum: PaymentMode })
-  @IsEnum(PaymentMode)
-  payMode: PaymentMode;
+  @ApiProperty({ example: 'CASH', enum: ['CASH', 'COD', 'ONLINE', 'ACCOUNT'] })
+  @IsString()
+  @IsNotEmpty()
+  @IsIn(['CASH', 'COD', 'ONLINE', 'ACCOUNT'], { message: 'payMode must be one of the following values: CASH, COD, ONLINE, ACCOUNT' })
+  payMode: string;
 
   @ApiProperty({ example: 0, required: false })
   @IsOptional()

@@ -84,20 +84,25 @@ export function printBookingSlip(booking, options = {}) {
   const codAmt = b.codAmount != null ? Number(b.codAmount) : 0
   const payModeUpper = String(b.paymentMode || b.payMode || '').toUpperCase()
   const isCod = payModeUpper === 'COD'
+  const isAccount = payModeUpper === 'ACCOUNT'
 
-  const serviceChg = rateVal * piecesVal
-  // Other Amount: positive = additional charges (Add), negative = discount
-  const valueAddedService = otherVal > 0 ? otherVal : 0
-  const discount = otherVal < 0 ? Math.abs(otherVal) : 0
+  const serviceChg = isAccount ? 0 : rateVal * piecesVal
+  const valueAddedService = isAccount ? 0 : (otherVal > 0 ? otherVal : 0)
+  const discount = isAccount ? 0 : (otherVal < 0 ? Math.abs(otherVal) : 0)
 
-  const totalNum = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0))
+  const totalNum = isAccount ? 0 : (b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0)))
+  const displayOtherVal = isAccount ? 0 : otherVal
+  const displayCodAmt = isAccount ? 0 : codAmt
 
   // GST 16% and Fuel Surcharge 15% on service charges; TOTAL = Service Charges + GST + Fuel
-  const GST_RATE = 0.16
-  const FUEL_RATE = 0.15
-  const gstAmount = totalNum * GST_RATE
-  const fuelSurchargeAmount = totalNum * FUEL_RATE
-  const paymentTotal = totalNum + gstAmount + fuelSurchargeAmount
+  const paymentTotal = isAccount ? 0 : totalNum
+
+  // Display pay mode with customer ID for Account mode
+  let payModeDisplay = payMode
+  if (isAccount) {
+    const customerId = b.customer?.customerCode || b.staffCode || b.dcReferenceNo || '—'
+    payModeDisplay = `Account - ${customerId}`
+  }
 
   // Handling instructions and Remarks: support %%%REMARKS%%% in handlingInstructions, or separate fields
   const handlingRaw = b.handlingInstructions || ''
@@ -133,12 +138,12 @@ export function printBookingSlip(booking, options = {}) {
     <div class="half">
       <div class="slip-top">
         <div class="logo-row">${logoBlockContent}</div>
-        <div class="copy-type">${escapeHtml(copyLabel)}</div>
         <div class="tracking-row">
           <div class="tracking-label">Tracking ID</div>
           <div class="barcode-wrap"><svg id="${escapeHtml(barcodeId)}" class="cn-barcode"></svg></div>
         </div>
       </div>
+      <div class="copy-type-row">${escapeHtml(copyLabel)}</div>
 
       <table class="grid-table">
         <tr>
@@ -146,7 +151,7 @@ export function printBookingSlip(booking, options = {}) {
           <td class="grid-cell"><span class="grid-label">Service Type</span><br>${escapeHtml(service)}</td>
         </tr>
         <tr>
-          <td class="grid-cell"><span class="grid-label">Payment Mode</span><br>${escapeHtml(String(payMode))}</td>
+          <td class="grid-cell"><span class="grid-label">Payment Mode</span><br>${escapeHtml(String(payModeDisplay))}</td>
           <td class="grid-cell"><span class="grid-label">Date-Time</span><br>${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</td>
         </tr>
         <tr>
@@ -180,7 +185,7 @@ export function printBookingSlip(booking, options = {}) {
       </div>
 
       ${(Array.isArray(b.subserviceNames) && b.subserviceNames.length > 0)
-        ? `<div class="section">
+      ? `<div class="section">
         <div class="section-title">Item Details</div>
         <table class="doc-table">
           <tr><th>Description</th><th>Qty</th></tr>
@@ -190,7 +195,7 @@ export function printBookingSlip(booking, options = {}) {
           </tr>
         </table>
       </div>`
-        : ''}
+      : ''}
 
       <div class="section">
         <div class="kv-row"><span class="kv-label">Express Center Cut Of Time:</span> ${cutOffTimeStr ? escapeHtml(cutOffTimeStr) : '—'}</div>
@@ -200,8 +205,6 @@ export function printBookingSlip(booking, options = {}) {
         <div class="section-title">Payment Details</div>
         <table class="payment-table">
           <tr><td class="pay-label">Service Charges:</td><td class="pay-val">${escapeHtml(formatDecimal(totalNum))}</td></tr>
-          <tr><td class="pay-label">GST (16%):</td><td class="pay-val">${escapeHtml(formatDecimal(gstAmount))}</td></tr>
-          <tr><td class="pay-label">Fuel Surcharge (15%):</td><td class="pay-val">${escapeHtml(formatDecimal(fuelSurchargeAmount))}</td></tr>
           ${discount > 0 ? `<tr><td class="pay-label">Discount:</td><td class="pay-val">${escapeHtml(formatDecimal(discount))}</td></tr>` : ''}
           ${valueAddedService > 0 ? `<tr><td class="pay-label">Other Amount (Add):</td><td class="pay-val">${escapeHtml(formatDecimal(valueAddedService))}</td></tr>` : ''}
           ${isCod && codAmt > 0 ? `<tr><td class="pay-label">COD Amount:</td><td class="pay-val">${escapeHtml(formatDecimal(codAmt))}</td></tr>` : ''}
@@ -256,9 +259,7 @@ export function printBookingSlip(booking, options = {}) {
     .cn-block { flex: 1; text-align: center; }
     .cn-label { font-weight: 700; }
     .cn-value { font-weight: 900; font-size: 14px; letter-spacing: 0.05em; }
-    .copy-type { font-size: 9px; font-weight: 700; text-transform: uppercase; }
-    .tracking-row { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .tracking-label { font-weight: 800; font-size: 9px; white-space: nowrap; }
+    .copy-type-row { text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 0; border-bottom: 2px solid #333; margin-bottom: 6px; }
     .tracking-row { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
     .tracking-label { font-size: 9px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
     .barcode-wrap { min-height: 36px; }
@@ -399,7 +400,6 @@ export function printCodSlip(booking, options = {}) {
           <td class="cod-td-barcode" colspan="2">
             <div class="cod-barcode-wrap"><svg id="${escapeHtml(cnBarcodeId)}" class="cod-cn-barcode"></svg></div>
             <div class="cod-cn-number">${escapeHtml(cn || '—')}</div>
-            <div class="cod-copy-type">${escapeHtml(copyLabel)}</div>
           </td>
           <td class="cod-td-meta">
             <div><strong>Date:</strong> ${escapeHtml(dateStr)}</div>
@@ -408,6 +408,9 @@ export function printCodSlip(booking, options = {}) {
             <div><strong>Origin:</strong> ${escapeHtml(origin)}</div>
             <div><strong>Destination:</strong> ${escapeHtml(destination)}</div>
           </td>
+        </tr>
+        <tr>
+          <td colspan="4" class="cod-td-copy-type">${escapeHtml(copyLabel)}</td>
         </tr>
         <tr>
           <td class="cod-td-party" colspan="2">
@@ -489,7 +492,7 @@ export function printCodSlip(booking, options = {}) {
     .cod-barcode-wrap { min-height: 32px; }
     .cod-cn-barcode, .cod-amount-barcode-svg { display: block; margin: 0 auto; }
     .cod-cn-number { font-weight: 700; font-size: 11px; margin-top: 2px; }
-    .cod-copy-type { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+    .cod-td-copy-type { text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 0; background-color: #f3f4f6; border-bottom: 2px solid #333 !important; }
     .cod-label { font-weight: 700; font-size: 9px; margin-bottom: 2px; }
     .cod-value { font-size: 9px; }
     .cod-amount-value { font-weight: 700; font-size: 12px; margin-top: 2px; }

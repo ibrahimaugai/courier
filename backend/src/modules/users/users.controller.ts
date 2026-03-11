@@ -13,7 +13,7 @@ import { UserRole } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -39,8 +39,11 @@ export class UsersController {
   @Patch(':id/approve')
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Approve customer (SUPER_ADMIN only)' })
-  approveCustomer(@Param('id') id: string) {
-    return this.usersService.approveCustomer(id);
+  approveCustomer(
+    @Param('id') id: string,
+    @Body('staffCode') staffCode: string
+  ) {
+    return this.usersService.approveCustomer(id, staffCode);
   }
 
   @Get(':id')

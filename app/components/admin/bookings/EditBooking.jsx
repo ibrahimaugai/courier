@@ -54,8 +54,13 @@ export default function EditBooking() {
         codAmount: '',
         rate: '',
         totalAmount: 0,
+        dcReferenceNo: '',
         customerRef: '',
     })
+    const [showUserModal, setShowUserModal] = useState(false)
+    const [users, setUsers] = useState([])
+    const [userSearchTerm, setUserSearchTerm] = useState('')
+    const [selectedAccountUser, setSelectedAccountUser] = useState(null)
 
     const { rules: reduxRules, cities, services } = useSelector((state) => state.pricing)
 
@@ -81,16 +86,16 @@ export default function EditBooking() {
                     cnNumber: data.cnNumber || '',
                     pieces: data.pieces?.toString() || '1',
                     handlingInstructions: (() => {
-                      const raw = data.handlingInstructions || ''
-                      return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[0] || '').trim() : raw
+                        const raw = data.handlingInstructions || ''
+                        return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[0] || '').trim() : raw
                     })(),
                     remarks: (() => {
-                      const raw = data.handlingInstructions || ''
-                      return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[1] || '').trim() : ''
+                        const raw = data.handlingInstructions || ''
+                        return raw.includes('%%%REMARKS%%%') ? (raw.split('%%%REMARKS%%%')[1] || '').trim() : ''
                     })(),
                     packetContent: data.packetContent || '',
                     services: data.service?.serviceName || data.serviceId || '',
-                    payMode: data.paymentMode === 'CASH' ? 'Cash' : 'Online',
+                    payMode: data.paymentMode === 'CASH' ? 'Cash' : (data.paymentMode === 'ACCOUNT' ? 'Account' : 'Online'),
                     volumetricWeight: data.volumetricWeight?.toString() || '0',
                     weight: data.weight?.toString() || '',
                     // Shipper
@@ -135,7 +140,36 @@ export default function EditBooking() {
             ...prev,
             [name]: value
         }))
+
+        // Trigger user modal if Account is selected
+        if (name === 'payMode' && value === 'Account') {
+            setShowUserModal(true)
+            if (users.length === 0) {
+                api.getUsers()
+                    .then(data => {
+                        const allUsers = Array.isArray(data) ? data : (data?.data || [])
+                        setUsers(allUsers.filter(u => u.role === 'USER' && u.isActive))
+                    })
+                    .catch(err => console.error('Error fetching users:', err))
+            }
+        }
     }
+
+    const handleUserSelect = (selectedUser) => {
+        setSelectedAccountUser(selectedUser)
+        setFormData(prev => ({
+            ...prev,
+            fullName: selectedUser.username,
+            mobileNumber: selectedUser.phone || '', // May be empty
+            dcReferenceNo: selectedUser.staffCode || selectedUser.username,
+        }))
+        setShowUserModal(false)
+    }
+
+    const filteredUsers = users.filter(u =>
+    (u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        u.staffCode?.toLowerCase().includes(userSearchTerm.toLowerCase()))
+    )
 
     // Rate Calculation Logic (same as BookingConsignment)
     useEffect(() => {
@@ -168,7 +202,7 @@ export default function EditBooking() {
         const otherAmount = parseFloat(formData.otherAmount || '0')
         const codAmt = parseFloat(formData.codAmount || '0') || 0
         const shippingCharges = (calculatedRate * pieces) + otherAmount
-        const totalAmount = formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges
+        const totalAmount = formData.payMode === 'Account' ? 0 : (formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges)
 
         setFormData(prev => ({
             ...prev,
@@ -205,9 +239,9 @@ export default function EditBooking() {
                     ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
                     : undefined,
                 codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
-                dcReferenceNo: formData.customerRef || undefined,
+                dcReferenceNo: formData.dcReferenceNo || undefined,
                 packetContent: formData.packetContent,
-                paymentMode: formData.payMode === 'Cash' ? 'CASH' : 'ONLINE',
+                paymentMode: formData.payMode === 'Cash' ? 'CASH' : (formData.payMode === 'Account' ? 'ACCOUNT' : 'ONLINE'),
                 volumetricWeight: parseFloat(formData.volumetricWeight || '0'),
                 weight: parseFloat(formData.weight),
                 chargeableWeight: Math.max(parseFloat(formData.weight || '0'), parseFloat(formData.volumetricWeight || '0')),
@@ -347,6 +381,73 @@ export default function EditBooking() {
                             Update Booking
                         </button>
                     </div>
+
+                    {/* User Selection Modal (for ACCOUNT pay mode) */}
+                    {showUserModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200">
+                                {/* Modal Header */}
+                                <div className="bg-sky-600 px-6 py-4 flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-white">Select Account User</h3>
+                                    <button
+                                        onClick={() => setShowUserModal(false)}
+                                        className="text-white hover:bg-white/20 p-1 rounded-full transition-colors"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+
+                                {/* Modal Search */}
+                                <div className="p-4 border-b border-gray-100">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by username or staff code..."
+                                            value={userSearchTerm}
+                                            onChange={(e) => setUserSearchTerm(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Modal Body */}
+                                <div className="max-h-[400px] overflow-y-auto p-4">
+                                    {filteredUsers.length === 0 ? (
+                                        <div className="text-center py-8 text-gray-500 italic">
+                                            No users found matching your search.
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {filteredUsers.map((u) => (
+                                                <button
+                                                    key={u.id}
+                                                    onClick={() => handleUserSelect(u)}
+                                                    className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-sky-500 hover:bg-sky-50 transition-all text-left"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-gray-900">{u.username}</div>
+                                                        <div className="text-sm text-gray-500">Code: {u.staffCode || 'N/A'}</div>
+                                                    </div>
+                                                    <div className="text-sky-600 font-medium">Select →</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Modal Footer */}
+                                <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-200">
+                                    <button
+                                        onClick={() => setShowUserModal(false)}
+                                        className="px-6 py-2 border border-gray-300 text-gray-700 bg-white rounded-md hover:bg-gray-50 transition-colors font-medium"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
