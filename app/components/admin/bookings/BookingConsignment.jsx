@@ -1070,69 +1070,88 @@ export default function BookingConsignment() {
             setToast({ isVisible: true, message: 'Please fill all required fields', type: 'error' })
             return
           }
-          const citiesArr = cities || []
-          const citiesMap = citiesArr.reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
-          const citiesById = citiesArr.reduce((acc, c) => { acc[c.id] = c; return acc }, {})
-          const originCityObj = formData.originCity && citiesById[formData.originCity]
-          const destCityObj = formData.destination && citiesById[formData.destination]
-          const draft = {
-            cnNumber: formData.cnNumber || 'TBD',
-            fullName: formData.fullName,
-            mobileNumber: formData.mobileNumber,
-            address: formData.address,
-            consigneeFullName: formData.consigneeFullName,
-            consigneeMobileNumber: formData.consigneeMobileNumber,
-            consigneeAddress: formData.consigneeAddress,
-            originCityId: formData.originCity,
-            destinationCityId: formData.destination,
-            productId: formData.product,
-            serviceId: formData.services,
-            originCity: formData.originCity ? {
-              cityName: citiesMap[formData.originCity] || formData.originCity,
-              cityCode: originCityObj?.cityCode || originCityObj?.code || null
-            } : null,
-            destinationCity: formData.destination ? {
-              cityName: citiesMap[formData.destination] || formData.destination,
-              cityCode: destCityObj?.cityCode || destCityObj?.code || null
-            } : null,
-            product: formData.product ? { productName: formData.product } : null,
-            service: formData.services ? { serviceName: formData.services } : null,
-            pieces: formData.pieces,
-            weight: formData.weight,
-            packetContent: formData.packetContent,
-            rate: formData.rate,
-            otherAmount: formData.otherAmount,
-            totalAmount: formData.totalAmount,
-            payMode: formData.payMode,
-            preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
-            preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
-            codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
-            customerRef: formData.customerRef || '',
-            dcReferenceNo: formData.dcReferenceNo || formData.customerRef || undefined,
-            handlingInstructions: (formData.handlingInstructions || formData.remarks)
-              ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
-              : '',
-            remarks: formData.remarks || '',
-            subserviceNames: (selectedSubservices?.length && formData.services)
-              ? (subservicesData[formData.services] || [])
-                .filter((s) => selectedSubservices.includes(s.id))
-                .map((s) => s.name)
-                .filter(Boolean)
-              : undefined,
-          }
-          let config = {}
-          try {
-            const res = await api.getConfiguration()
-            config = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null) ?? {}
-          } catch (_) { }
-          config.staffCode = config.staffCode ?? user?.staffCode
-          config.username = config.username ?? config.updatedByUser?.username ?? user?.username
-          if (formData.product === 'COD') {
-            printCodSlip(draft, { config })
-          } else {
-            printBookingSlip(draft, { config })
-          }
-          setTimeout(() => handleSubmit({ preventDefault: () => { } }), 2000)
+          
+          // Show loading state immediately
+          setToast({ isVisible: true, message: 'Processing...', type: 'info' })
+          
+          // Defer ALL heavy operations to next event loop
+          setTimeout(async () => {
+            try {
+              const citiesArr = cities || []
+              const citiesMap = citiesArr.reduce((acc, c) => { acc[c.id] = c.cityName || c.name; return acc }, {})
+              const citiesById = citiesArr.reduce((acc, c) => { acc[c.id] = c; return acc }, {})
+              const originCityObj = formData.originCity && citiesById[formData.originCity]
+              const destCityObj = formData.destination && citiesById[formData.destination]
+              const draft = {
+                cnNumber: formData.cnNumber || 'TBD',
+                fullName: formData.fullName,
+                mobileNumber: formData.mobileNumber,
+                address: formData.address,
+                consigneeFullName: formData.consigneeFullName,
+                consigneeMobileNumber: formData.consigneeMobileNumber,
+                consigneeAddress: formData.consigneeAddress,
+                originCityId: formData.originCity,
+                destinationCityId: formData.destination,
+                productId: formData.product,
+                serviceId: formData.services,
+                originCity: formData.originCity ? {
+                  cityName: citiesMap[formData.originCity] || formData.originCity,
+                  cityCode: originCityObj?.cityCode || originCityObj?.code || null
+                } : null,
+                destinationCity: formData.destination ? {
+                  cityName: citiesMap[formData.destination] || formData.destination,
+                  cityCode: destCityObj?.cityCode || destCityObj?.code || null
+                } : null,
+                product: formData.product ? { productName: formData.product } : null,
+                service: formData.services ? { serviceName: formData.services } : null,
+                pieces: formData.pieces,
+                weight: formData.weight,
+                packetContent: formData.packetContent,
+                rate: formData.rate,
+                otherAmount: formData.otherAmount,
+                totalAmount: formData.totalAmount,
+                payMode: formData.payMode,
+                preferredDeliveryDate: formData.preferredDeliveryDate || undefined,
+                preferredDeliveryTime: formData.preferredDeliveryTime || undefined,
+                codAmount: formData.product === 'COD' ? parseFloat(formData.codAmount || '0') || undefined : undefined,
+                customerRef: formData.customerRef || '',
+                dcReferenceNo: formData.dcReferenceNo || formData.customerRef || undefined,
+                handlingInstructions: (formData.handlingInstructions || formData.remarks)
+                  ? [formData.handlingInstructions, formData.remarks].filter(Boolean).join('%%%REMARKS%%%')
+                  : '',
+                remarks: formData.remarks || '',
+                subserviceNames: (selectedSubservices?.length && formData.services)
+                  ? (subservicesData[formData.services] || [])
+                    .filter((s) => selectedSubservices.includes(s.id))
+                    .map((s) => s.name)
+                    .filter(Boolean)
+                  : undefined,
+              }
+              
+              let config = {}
+              try {
+                const res = await api.getConfiguration()
+                config = res?.data?.config ?? res?.config ?? (res?.stationCode ? res : null) ?? {}
+              } catch (_) { }
+              config.staffCode = config.staffCode ?? user?.staffCode
+              config.username = config.username ?? config.updatedByUser?.username ?? user?.username
+              
+              // Save form
+              handleSubmit({ preventDefault: () => { } })
+              
+              // Open print in separate deferred call
+              setTimeout(() => {
+                if (formData.product === 'COD') {
+                  printCodSlip(draft, { config })
+                } else {
+                  printBookingSlip(draft, { config })
+                }
+              }, 50)
+            } catch (err) {
+              console.error('Error:', err)
+              setToast({ isVisible: true, message: 'An error occurred', type: 'error' })
+            }
+          }, 0)
         }}
       />
 

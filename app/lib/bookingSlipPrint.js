@@ -306,7 +306,7 @@ export function printBookingSlip(booking, options = {}) {
   <script>
     (function() {
       var cn = (document.getElementById('cn-value') && document.getElementById('cn-value').textContent) || '';
-      function doPrint() {
+      function generateBarcodes() {
         try {
           if (cn && typeof JsBarcode !== 'undefined') {
             var left = document.getElementById('barcode-left');
@@ -315,10 +315,9 @@ export function printBookingSlip(booking, options = {}) {
             if (right) JsBarcode(right, cn, { format: 'CODE128', width: 1.5, height: 40 });
           }
         } catch (e) {}
-        window.print();
       }
-      if (document.readyState === 'complete') doPrint();
-      else window.addEventListener('load', doPrint);
+      if (document.readyState === 'complete') generateBarcodes();
+      else window.addEventListener('load', generateBarcodes);
     })();
   </script>
 </body>
@@ -519,7 +518,7 @@ export function printCodSlip(booking, options = {}) {
   <script>
     (function() {
       var cn = (document.getElementById('cod-cn-value') && document.getElementById('cod-cn-value').textContent) || '';
-      function doPrint() {
+      function generateBarcodes() {
         try {
           if (typeof JsBarcode !== 'undefined' && cn) {
             for (var i = 1; i <= 3; i++) {
@@ -528,10 +527,9 @@ export function printCodSlip(booking, options = {}) {
             }
           }
         } catch (e) {}
-        window.print();
       }
-      if (document.readyState === 'complete') doPrint();
-      else window.addEventListener('load', doPrint);
+      if (document.readyState === 'complete') generateBarcodes();
+      else window.addEventListener('load', generateBarcodes);
     })();
   </script>
 </body>
