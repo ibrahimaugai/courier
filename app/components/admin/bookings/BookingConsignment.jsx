@@ -348,6 +348,7 @@ export default function BookingConsignment() {
       }
       // When Account is selected, fetch users if not already fetched and open modal
       if (name === 'payMode' && value === 'Account') {
+        updated.otherAmount = '0'  // Clear other amount for ACCOUNT mode
         setShowUserModal(true)
         if (users.length === 0) {
           api.getUsers()

@@ -193,16 +193,14 @@ export class CreateConsignmentDto {
   @Min(0)
   rate?: number;
 
-  @ApiProperty({ example: 500, required: false })
+  @ApiProperty({ example: 500, required: false, description: 'Additional amount or discount (can be negative for discounts)' })
   @IsOptional()
   @IsNumber()
-  @Min(0)
   otherAmount?: number;
 
-  @ApiProperty({ example: 1500, required: false })
+  @ApiProperty({ example: 1500, required: false, description: 'Total amount (can be 0 for ACCOUNT mode)' })
   @IsOptional()
   @IsNumber()
-  @Min(0)
   totalAmount?: number;
 
   @ApiProperty({ example: 1000, required: false })
