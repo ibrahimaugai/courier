@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
+import { useAttestationServices } from '../../../lib/useAttestationServices'
 
 // Blue Box weight-tier services: 1kg–10kg, then 15, 20, 25kg. "Blue Box" (generic) is excluded from the list.
 const BLUE_BOX_WEIGHT_SERVICES = [
@@ -31,17 +32,7 @@ export default function UserShipmentDetails({
   subservicesData = {},
   onOpenOnTimeDeliveryModal,
 }) {
-  const ATTESTATION_SERVICE_VALUES = [
-    'ATS - Doc MOFA Attestation',
-    'ATR - Doc MOFA Home Delivery',
-    'APN - Apostille Normal',
-    'APU - Apostille Urgent',
-    'AE - UAE Embassy',
-    'BV - Board Verification',
-    'HEC - HEC',
-    'IBCC - IBCC',
-    'National Bureau',
-  ]
+  const { services: ATTESTATION_SERVICE_VALUES } = useAttestationServices()
   const isOnTimeService = formData.product === 'General' && formData.services === 'On Time Service'
   const hasPreferredDelivery = !!(formData.preferredDeliveryDate || formData.preferredDeliveryTime)
   const formatDeliveryDate = (dateStr) => {

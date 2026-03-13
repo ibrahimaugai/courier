@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Edit, Sparkles, X, Loader2, CheckCircle, AlertCircle, Search } from 'lucide-react'
 import { api } from '../../../lib/api'
+import { useAttestationServices } from '../../../lib/useAttestationServices'
 import { printBookingSlip, printCodSlip } from '../../../lib/bookingSlipPrint'
 import Toast from '../../Toast'
 import ShipmentDetails from './ShipmentDetails'
@@ -40,17 +41,7 @@ export default function BookingConsignment() {
   const dispatch = useDispatch()
   const { user } = useSelector((state) => state.auth)
   const { cities, rules: reduxRules, services: reduxServices } = useSelector((state) => state.pricing)
-  const ATTESTATION_SERVICE_VALUES = [
-    'ATS - Doc MOFA Attestation',
-    'ATR - Doc MOFA Home Delivery',
-    'APN - Apostille Normal',
-    'APU - Apostille Urgent',
-    'AE - UAE Embassy',
-    'BV - Board Verification',
-    'HEC - HEC',
-    'IBCC - IBCC',
-    'National Bureau',
-  ]
+  const { services: ATTESTATION_SERVICE_VALUES } = useAttestationServices()
 
   const [formData, setFormData] = useState({
     product: '',
