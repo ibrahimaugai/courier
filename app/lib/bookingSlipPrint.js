@@ -418,10 +418,11 @@ export function printCodSlip(booking, options = {}) {
             <div class="cod-value">Ph: ${escapeHtml(shipperPhone)}</div>
             <div class="cod-value">${escapeHtml(shipperAddress || origin)}</div>
           </td>
-          <td class="cod-td-party">
+          <td class="cod-td-party" colspan="2">
             <div class="cod-label">Consignee</div>
             <div class="cod-value">${escapeHtml(consigneeName)}</div>
-            <div class="cod-value">${escapeHtml(consigneeAddress)} ${escapeHtml(consigneePhone)}</div>
+            <div class="cod-value">Ph: ${escapeHtml(consigneePhone)}</div>
+            <div class="cod-value">${escapeHtml(consigneeAddress)}</div>
           </td>
         </tr>
         <tr>
@@ -469,8 +470,8 @@ export function printCodSlip(booking, options = {}) {
     * { box-sizing: border-box; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; color: #111; font-size: 10px; }
     .cod-page { width: 210mm; min-height: 297mm; padding: 8mm; margin: 0 auto; }
-    .cod-slip { border: 1px solid #333; padding: 10px; margin-bottom: 6px; background: #fff; break-inside: avoid; }
-    .cod-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .cod-slip { width: 100%; max-width: 100%; border: 1px solid #333; padding: 10px; margin-bottom: 6px; background: #fff; break-inside: avoid; }
+    .cod-table { width: 100%; max-width: 100%; border-collapse: collapse; table-layout: auto; }
     .cod-table td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
     .cod-td-logo { width: 18%; }
     .cod-td-barcode { width: 32%; text-align: center; }
@@ -493,7 +494,7 @@ export function printCodSlip(booking, options = {}) {
     .cod-cn-number { font-weight: 700; font-size: 11px; margin-top: 2px; }
     .cod-td-copy-type { text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 0; background-color: #f3f4f6; border-bottom: 2px solid #333 !important; }
     .cod-label { font-weight: 700; font-size: 9px; margin-bottom: 2px; }
-    .cod-value { font-size: 9px; }
+    .cod-value { font-size: 9px; word-wrap: break-word; overflow-wrap: break-word; white-space: normal; }
     .cod-amount-value { font-weight: 700; font-size: 12px; margin-top: 2px; }
     .cod-footer-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 6px; padding-top: 4px; border-top: 1px solid #ccc; }
     .cod-disclaimer { font-size: 8px; }
