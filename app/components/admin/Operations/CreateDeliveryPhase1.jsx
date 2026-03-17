@@ -19,12 +19,32 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
         cn: ''
     })
 
+    const toNumber = (value) => {
+        if (value == null || value === '') return 0
+        if (typeof value === 'object' && value !== null && typeof value.toString === 'function') {
+            const n = parseFloat(value.toString())
+            return Number.isFinite(n) ? n : 0
+        }
+        const n = Number(value)
+        return Number.isFinite(n) ? n : 0
+    }
+
+    const formatCurrency = (value) => {
+        const num = toNumber(value)
+        if (num === 0) return '—'
+        return `RS. ${num.toLocaleString()}`
+    }
+
     const [shipments, setShipments] = useState([])
     const [isLoading, setIsLoading] = useState(false)
     const [riders, setRiders] = useState([])
     const [routes, setRoutes] = useState([])
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+
+    const totalPieces = shipments.reduce((sum, item) => sum + toNumber(item.pieces), 0)
+    const totalWeight = shipments.reduce((sum, item) => sum + toNumber(item.weight), 0)
+    const totalAmount = shipments.reduce((sum, item) => sum + toNumber(item.amount), 0)
 
     const cnInputRef = useRef(null)
     const lastAttemptedCnRef = useRef('')
@@ -102,6 +122,7 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
             const res = await api.trackBooking(trimmedCn)
             const booking = res.data || res
             if (booking) {
+                const amount = toNumber(booking.codAmount)
                 const newShipment = {
                     sr: shipments.length + 1,
                     cn: booking.cnNumber,
@@ -109,7 +130,7 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
                     origin: booking.originCity?.cityName || 'N/A',
                     weight: booking.weight,
                     pieces: booking.pieces,
-                    fod: booking.codAmount || '0',
+                    amount,
                     scannedAt: new Date().toLocaleTimeString()
                 }
                 setShipments([newShipment, ...shipments])
@@ -384,13 +405,14 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
                                         <th className="px-6 py-4">CN Number</th>
                                         <th className="px-6 py-4">Origin</th>
                                         <th className="px-6 py-4">Pcs / Wgt</th>
+                                        <th className="px-6 py-4">Amount</th>
                                         <th className="px-6 py-4">Scan Time</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {shipments.length === 0 ? (
                                         <tr>
-                                            <td colSpan="5" className="py-24 px-10 text-center">
+                                            <td colSpan="6" className="py-24 px-10 text-center">
                                                 <Package className="w-12 h-12 text-gray-100 mx-auto mb-4" />
                                                 <p className="text-sm font-black text-gray-300 uppercase tracking-widest">No shipments scanned</p>
                                             </td>
@@ -407,9 +429,18 @@ export default function CreateDeliveryPhase1({ setActivePage }) {
                                                         <span className="text-[10px] text-gray-500 font-bold">{row.weight} KG</span>
                                                     </div>
                                                 </td>
+                                                <td className="px-6 py-4 text-xs font-bold text-gray-900">{formatCurrency(row.amount)}</td>
                                                 <td className="px-6 py-4 text-xs font-bold text-gray-500">{row.scannedAt}</td>
                                             </tr>
                                         ))
+                                    )}
+                                    {shipments.length > 0 && (
+                                        <tr className="bg-gray-50">
+                                            <td colSpan={3} className="px-6 py-3 text-xs font-black text-gray-500">Total</td>
+                                            <td className="px-6 py-3 text-xs font-black text-gray-700">{totalPieces} PCS / {totalWeight.toFixed(2)} KG</td>
+                                            <td className="px-6 py-3 text-xs font-black text-gray-900">{formatCurrency(totalAmount)}</td>
+                                            <td className="px-6 py-3" />
+                                        </tr>
                                     )}
                                 </tbody>
                             </table>

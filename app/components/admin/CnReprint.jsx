@@ -12,6 +12,23 @@ export default function CnReprint() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
   const handleSearch = async (e) => {
     e.preventDefault()
     if (!cnNumber.trim()) return
@@ -239,7 +256,9 @@ export default function CnReprint() {
                 )}
                 <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="text-base font-bold text-gray-800">Total Amount:</span>
-                  <span className="text-base font-bold text-green-600">PKR {bookingData.totalAmount}</span>
+                  <span className="text-base font-bold text-green-600">
+                    PKR {(toNumber(bookingData.totalAmount) + (isCodBooking(bookingData) ? toNumber(bookingData.codAmount) : 0)).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between pt-1">
                   <span className="text-xs font-medium text-gray-500">Payment Mode:</span>

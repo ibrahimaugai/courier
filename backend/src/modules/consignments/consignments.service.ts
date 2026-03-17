@@ -470,9 +470,9 @@ export class ConsignmentsService {
           declaredValue: createConsignmentDto.declaredValue,
           packetContent: createConsignmentDto.packetContent,
           handlingInstructions: createConsignmentDto.handlingInstructions,
-          paymentMode: ((createConsignmentDto.payMode as string) === 'PREPAID' ? PaymentMode.CASH :
+          paymentMode: (createConsignmentDto.payMode as string) === 'PREPAID' ? PaymentMode.CASH :
             (createConsignmentDto.payMode as string) === 'TOPAY' ? PaymentMode.ONLINE :
-              createConsignmentDto.payMode) as any,
+              createConsignmentDto.payMode,
           codAmount: createConsignmentDto.codAmount,
           rate: createConsignmentDto.rate || 0,
           otherAmount: createConsignmentDto.otherAmount || 0,
@@ -963,11 +963,11 @@ export class ConsignmentsService {
             Math.max(parseFloat(String(updateData.weight || 0)), parseFloat(String(updateData.volumetricWeight || 0))) : undefined,
           packetContent: updateData.packetContent !== undefined ? updateData.packetContent : undefined,
           handlingInstructions: updateData.handlingInstructions !== undefined ? updateData.handlingInstructions : undefined,
-          paymentMode: ((updateData.payMode ?? updateData.paymentMode) ? (
+          paymentMode: (updateData.payMode ?? updateData.paymentMode) ? (
             (updateData.payMode ?? updateData.paymentMode) === 'PREPAID' ? 'CASH' :
               (updateData.payMode ?? updateData.paymentMode) === 'TOPAY' ? 'ONLINE' :
                 (updateData.payMode ?? updateData.paymentMode)
-          ) : undefined) as any,
+          ) : undefined,
           declaredValue: updateData.declaredValue !== undefined ? (updateData.declaredValue === null ? null : parseFloat(String(updateData.declaredValue))) : undefined,
 
           // Price fields

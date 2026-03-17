@@ -16,6 +16,23 @@ export default function ShiftClose() {
   const [activeBatch, setActiveBatch] = useState(null)
   const [config, setConfig] = useState(null)
 
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
   // Fetch active batch and config on mount
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -356,7 +373,12 @@ export default function ShiftClose() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="text-sm font-black text-gray-900">
-                            {booking.totalAmount != null ? Number(booking.totalAmount).toLocaleString() : '—'}
+                            {(() => {
+                              const base = toNumber(booking.totalAmount)
+                              const cod = isCodBooking(booking) ? toNumber(booking.codAmount) : 0
+                              const amt = base + cod
+                              return amt > 0 ? amt.toLocaleString() : '—'
+                            })()}
                           </span>
                         </td>
                       </tr>

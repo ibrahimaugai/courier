@@ -38,6 +38,29 @@ export default function RmsToday() {
   }
 
   const { bookings, summary } = data
+  const safeNum = (v) => {
+    if (v == null) return 0
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+    const s = String(v).trim()
+    if (!s) return 0
+    const cleaned = s.replace(/[^0-9.-]/g, '')
+    const n = Number(cleaned)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const activeBookings = Array.isArray(bookings) ? bookings.filter((b) => b?.status !== 'VOIDED') : []
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+  const computedTotalRevenue = activeBookings.reduce((sum, b) => {
+    const codPart = isCodBooking(b) ? safeNum(b?.codAmount) : 0
+    return sum + safeNum(b?.totalAmount) + codPart
+  }, 0)
+  const computedAvgRevenue = computedTotalRevenue / (activeBookings.length || 1)
+
   const formattedDate = new Date(selectedDate).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -111,7 +134,7 @@ export default function RmsToday() {
               <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Revenue</span>
             </div>
             <p className="text-xs text-gray-400 font-bold mb-1">Total PKR</p>
-            <p className="text-3xl font-black text-gray-900">Rs. {summary.totalRevenue.toLocaleString()}</p>
+            <p className="text-3xl font-black text-gray-900">Rs. {computedTotalRevenue.toLocaleString()}</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100 hover:border-amber-400 transition-all group">
@@ -145,7 +168,7 @@ export default function RmsToday() {
             <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Pay Mode Distribution</h3>
             <div className="space-y-4">
               {[
-                { label: 'COD (Cash On Delivery)', icon: Wallet, color: 'emerald', count: summary.totalBookings ?? 0, rev: summary.totalRevenue ?? 0 },
+                { label: 'COD (Cash On Delivery)', icon: Wallet, color: 'emerald', count: summary.totalBookings ?? 0, rev: computedTotalRevenue },
               ].map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
                   <div className="flex items-center gap-4">
@@ -172,7 +195,7 @@ export default function RmsToday() {
               <p className="text-sky-100 opacity-80 font-medium mb-6">Activity metrics for {formattedDate}</p>
               <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <p className="text-3xl font-black">{(summary.totalRevenue / (summary.totalBookings || 1)).toFixed(0)}</p>
+                  <p className="text-3xl font-black">{computedAvgRevenue.toFixed(0)}</p>
                   <p className="text-[10px] uppercase font-bold tracking-widest text-sky-300">Avg Revenue / Booking</p>
                 </div>
                 <div>
@@ -228,8 +251,8 @@ export default function RmsToday() {
               <tbody className="divide-y divide-gray-100">
                 {bookings.map((booking) => {
                   const isVoided = booking.status === 'VOIDED'
-                  const rawAmount = booking.totalAmount ?? booking.total ?? booking.amount
-                  const amountNum = rawAmount != null ? Number(rawAmount) : null
+                  const baseAmount = booking.totalAmount ?? booking.total ?? booking.amount
+                  const displayAmount = safeNum(baseAmount) + (isCodBooking(booking) ? safeNum(booking.codAmount) : 0)
                   return (
                   <tr key={booking.id} className={`transition-colors group cursor-default ${isVoided ? 'bg-red-50/50 hover:bg-red-50/70' : 'hover:bg-sky-50/40'}`}>
                     <td className="px-8 py-5 whitespace-nowrap">
@@ -279,8 +302,8 @@ export default function RmsToday() {
                       {isVoided ? (
                         <span className="text-red-600 font-black uppercase">Void</span>
                       ) : (
-                        amountNum != null && Number.isFinite(amountNum) ? (
-                          <span className="text-gray-900">Rs. {amountNum.toLocaleString()}</span>
+                        displayAmount > 0 ? (
+                          <span className="text-gray-900">Rs. {displayAmount.toLocaleString()}</span>
                         ) : (
                           <span className="text-gray-400 font-medium">—</span>
                         )

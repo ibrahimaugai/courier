@@ -64,6 +64,23 @@ export default function EditBooking() {
 
     const { rules: reduxRules, cities, services } = useSelector((state) => state.pricing)
 
+    const toNumber = (v) => {
+        if (v == null || v === '') return 0
+        const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+            ? parseFloat(v.toString())
+            : Number(v)
+        return Number.isFinite(n) ? n : 0
+    }
+
+    const isCodBooking = (b) => {
+        const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+        if (pm === 'COD') return true
+        const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+        if (serviceType === 'COD') return true
+        const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+        return prod === 'COD'
+    }
+
     const handleSearch = async (e) => {
         e.preventDefault()
         if (!cnNumber.trim()) return
@@ -174,7 +191,6 @@ export default function EditBooking() {
     // Rate Calculation Logic (same as BookingConsignment)
     useEffect(() => {
         if (!bookingId) return
-
         const calculateRate = () => {
             if (!formData.originCity || !formData.destination || !formData.services || !formData.product) {
                 return parseFloat(formData.rate) || 0
@@ -183,30 +199,60 @@ export default function EditBooking() {
             const physicalWeight = parseFloat(formData.weight || '0')
             const volumetricWeight = parseFloat(formData.volumetricWeight || '0')
             const applicableWeight = Math.max(physicalWeight, volumetricWeight)
-
             if (applicableWeight <= 0) return 0
 
-            const matchingRule = reduxRules.find(rule =>
+            // Blue Box Xkg services use locked weight tiers and service "Blue Box"
+            const blueBoxKgMatch = String(formData.services || '').match(/^Blue Box (\d+)kg$/)
+            const effectiveService = blueBoxKgMatch ? 'Blue Box' : formData.services
+            const weightForTier = blueBoxKgMatch ? parseFloat(blueBoxKgMatch[1]) : applicableWeight
+
+            const applicableRules = reduxRules.filter(rule =>
                 rule.originCityId === formData.originCity &&
                 rule.destinationCityId === formData.destination &&
-                rule.service?.serviceName === formData.services &&
-                applicableWeight >= rule.weightFrom &&
-                applicableWeight < rule.weightTo
+                rule.service?.serviceName === effectiveService
             )
 
-            return matchingRule ? matchingRule.baseRate : (parseFloat(formData.rate) || 0)
+            if (applicableRules.length === 0) return 0
+
+            const matchingRule = applicableRules.find(rule =>
+                weightForTier >= parseFloat(rule.weightFrom) &&
+                weightForTier <= parseFloat(rule.weightTo)
+            )
+
+            if (matchingRule) return parseFloat(matchingRule.baseRate)
+
+            // If weight exceeds all tiers, use the highest tier's rate
+            const highestTierRule = applicableRules.reduce((highest, current) => {
+                const currentWeightTo = parseFloat(current.weightTo)
+                const highestWeightTo = parseFloat(highest.weightTo)
+                return currentWeightTo > highestWeightTo ? current : highest
+            }, applicableRules[0])
+            return parseFloat(highestTierRule.baseRate)
         }
 
         const calculatedRate = calculateRate()
         const pieces = parseInt(formData.pieces || '1')
         const otherAmount = parseFloat(formData.otherAmount || '0')
         const codAmt = parseFloat(formData.codAmount || '0') || 0
-        const shippingCharges = (calculatedRate * pieces) + otherAmount
-        const totalAmount = formData.payMode === 'Account' ? 0 : (formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges)
+
+        // Force numeric safety (prevent type coercion issues) – same as BookingConsignment
+        const rate = Number(calculatedRate) || 0
+        const pcs = Number(pieces) || 1
+        const other = Number(otherAmount) || 0
+
+        const hasRequiredFields = formData.product && formData.originCity && formData.destination && formData.services && formData.weight
+
+        let finalRate = 0
+        let totalAmount = 0
+        if (hasRequiredFields && rate > 0) {
+            finalRate = rate
+            const shippingCharges = (rate * pcs) + other
+            totalAmount = formData.payMode === 'Account' ? 0 : (formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges)
+        }
 
         setFormData(prev => ({
             ...prev,
-            rate: calculatedRate.toString(),
+            rate: finalRate.toString(),
             totalAmount: totalAmount
         }))
     }, [

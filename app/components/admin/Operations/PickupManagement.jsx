@@ -184,7 +184,7 @@ export default function PickupManagement() {
   const getBatchKey = (p) => (p?.booking?.batchId ?? p?.booking?.batch?.id ?? 'no-batch')
   const getBatchLabel = (p) => (p?.booking?.batch?.batchCode || 'No batch')
   const isBatchClosed = (p) => p?.booking?.batch?.status === 'CLOSED'
-  const pickupsForList = safePickups.filter((p) => !isBatchClosed(p))
+  const pickupsForList = safePickups // Show all pickups regardless of batch status
   const batchesMap = pickupsForList.reduce((acc, p) => {
     const key = getBatchKey(p)
     if (!acc[key]) acc[key] = { key, label: getBatchLabel(p), pickups: [] }
@@ -205,7 +205,7 @@ export default function PickupManagement() {
     if (!batchId || batchId === 'no-batch') return
     try {
       await api.updateBatchStatus(batchId, 'CLOSED')
-      setToast({ isVisible: true, message: `Batch ${batch.label} marked as done and removed from list`, type: 'success' })
+      setToast({ isVisible: true, message: `Batch ${batch.label} marked as done`, type: 'success' })
       loadPickups()
     } catch (err) {
       setToast({ isVisible: true, message: err?.message || 'Failed to mark batch as done', type: 'error' })
@@ -336,6 +336,11 @@ export default function PickupManagement() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-bold text-slate-900">{batch.label}</span>
+                              {isBatchClosed(batch.firstPickup) && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-full border border-slate-200">
+                                  CLOSED
+                                </span>
+                              )}
                               <span className="text-xs text-slate-400 font-medium">({batch.pickups.length} pickup{batch.pickups.length !== 1 ? 's' : ''})</span>
                             </div>
                           </td>
@@ -406,11 +411,11 @@ export default function PickupManagement() {
                                 <Printer className="w-4 h-4" />
                                 Print
                               </button>
-                              {batch.key !== 'no-batch' && (
+                              {batch.key !== 'no-batch' && !isBatchClosed(batch.firstPickup) && (
                                 <button
                                   onClick={() => handleMarkBatchDone(batch)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-bold border border-emerald-200 transition-colors"
-                                  title="Mark batch as done (removes from list)"
+                                  title="Mark batch as done"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                   Done

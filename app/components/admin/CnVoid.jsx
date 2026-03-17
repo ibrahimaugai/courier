@@ -13,6 +13,23 @@ export default function CnVoid() {
   const [voidReason, setVoidReason] = useState('')
   const [showVoidConfirm, setShowVoidConfirm] = useState(false)
 
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
   const handleSearch = async (e) => {
     e.preventDefault()
     if (!cnNumber.trim()) return
@@ -146,7 +163,9 @@ export default function CnVoid() {
               </div>
               <div className="bg-gray-50 p-3 rounded">
                 <span className="block text-xs text-gray-500 uppercase font-bold mb-1">Total Amount</span>
-                <p className="text-lg font-bold text-sky-600">PKR {bookingData.totalAmount}</p>
+                <p className="text-lg font-bold text-sky-600">
+                  PKR {(toNumber(bookingData.totalAmount) + (isCodBooking(bookingData) ? toNumber(bookingData.codAmount) : 0)).toLocaleString()}
+                </p>
               </div>
             </div>
 

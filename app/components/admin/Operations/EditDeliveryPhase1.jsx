@@ -23,6 +23,26 @@ export default function EditDeliveryPhase1({ setActivePage, sheetId }) {
     })
     const [scannedConsignments, setScannedConsignments] = useState([])
 
+    const toNumber = (value) => {
+        if (value == null || value === '') return 0
+        if (typeof value === 'object' && value !== null && typeof value.toString === 'function') {
+            const n = parseFloat(value.toString())
+            return Number.isFinite(n) ? n : 0
+        }
+        const n = Number(value)
+        return Number.isFinite(n) ? n : 0
+    }
+
+    const formatCurrency = (value) => {
+        const num = toNumber(value)
+        if (num === 0) return '—'
+        return `RS. ${num.toLocaleString()}`
+    }
+
+    const totalPieces = scannedConsignments.reduce((sum, item) => sum + toNumber(item.pieces), 0)
+    const totalWeight = scannedConsignments.reduce((sum, item) => sum + toNumber(item.weight), 0)
+    const totalAmount = scannedConsignments.reduce((sum, item) => sum + toNumber(item.codAmount), 0)
+
     useEffect(() => {
         if (sheetId) {
             fetchSheetDetails()
@@ -313,7 +333,7 @@ export default function EditDeliveryPhase1({ setActivePage, sheetId }) {
                                         <th className="px-6 py-4">SR</th>
                                         <th className="px-6 py-4">CN NUMBER</th>
                                         <th className="px-6 py-4 text-center">WGT</th>
-                                        <th className="px-6 py-4 text-center">FOD</th>
+                                        <th className="px-6 py-4 text-center">Amount</th>
                                         <th className="px-6 py-4">STATUS</th>
                                         <th className="px-6 py-4 text-right">ACTION</th>
                                     </tr>
@@ -334,7 +354,7 @@ export default function EditDeliveryPhase1({ setActivePage, sheetId }) {
                                                     <span className="text-sm font-black text-sky-700">{item.cnNumber}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-center text-xs font-bold text-gray-600">{item.weight} KG</td>
-                                                <td className="px-6 py-4 text-center text-xs font-bold text-emerald-600">{item.codAmount || 0}</td>
+                                                <td className="px-6 py-4 text-center text-xs font-bold text-emerald-600">{formatCurrency(item.codAmount)}</td>
                                                 <td className="px-6 py-4">
                                                     {(item.shipmentId || item.deliverySheetId) ? (
                                                         <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-[10px] font-black uppercase tracking-widest">Saved</span>
@@ -352,6 +372,15 @@ export default function EditDeliveryPhase1({ setActivePage, sheetId }) {
                                                 </td>
                                             </tr>
                                         ))
+                                    )}
+                                    {scannedConsignments.length > 0 && (
+                                        <tr className="bg-gray-50">
+                                            <td colSpan={2} className="px-6 py-3 text-xs font-black text-gray-500">Total</td>
+                                            <td className="px-6 py-3 text-xs font-black text-gray-700">{totalWeight.toFixed(2)} KG</td>
+                                            <td className="px-6 py-3 text-xs font-black text-gray-900">{formatCurrency(totalAmount)}</td>
+                                            <td className="px-6 py-3" />
+                                            <td className="px-6 py-3" />
+                                        </tr>
                                     )}
                                 </tbody>
                             </table>

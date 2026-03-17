@@ -15,6 +15,23 @@ export default function UserShiftClose() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
   const fetchActiveBatch = useCallback(async () => {
     try {
       const result = await api.getLatestBatch()
@@ -218,7 +235,14 @@ export default function UserShiftClose() {
                         </td>
                         <td className="px-4 py-3 text-[11px] font-bold uppercase">{String(payMode).toLowerCase()}</td>
                         <td className="px-4 py-3 text-center text-sm">{b.pieces ?? '—'} / {Number.isFinite(w) ? w : (b.weight ?? '—')}</td>
-                        <td className="px-4 py-3 text-right font-black">{b.totalAmount != null ? Number(b.totalAmount).toLocaleString() : '—'}</td>
+                        <td className="px-4 py-3 text-right font-black">
+                          {(() => {
+                            const base = toNumber(b.totalAmount)
+                            const cod = isCodBooking(b) ? toNumber(b.codAmount) : 0
+                            const amt = base + cod
+                            return amt > 0 ? amt.toLocaleString() : '—'
+                          })()}
+                        </td>
                       </tr>
                     )
                   })}

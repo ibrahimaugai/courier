@@ -23,7 +23,24 @@ export function printShiftCloseReport(bookings = [], options = {}) {
       : 0
     return s + (Number.isFinite(w) ? w : 0)
   }, 0)
-  const totalAmt = list.reduce((s, b) => s + (parseFloat(b.totalAmount) || 0), 0)
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
+  const totalAmt = list.reduce((s, b) => s + toNumber(b.totalAmount) + (isCodBooking(b) ? toNumber(b.codAmount) : 0), 0)
 
   const row = (b, i) => {
     const originName = b.originCity?.cityName || b.originCity?.name || b.originCityId || '—'
@@ -36,6 +53,7 @@ export function printShiftCloseReport(bookings = [], options = {}) {
         : parseFloat(b.weight))
       : 0
     const isVoided = String(status).toUpperCase() === 'VOIDED'
+    const amountVal = toNumber(b.totalAmount) + (isCodBooking(b) ? toNumber(b.codAmount) : 0)
     return `
     <tr class="${isVoided ? 'sc-voided' : ''}">
       <td class="sc-td sc-td-num">${i + 1}</td>
@@ -53,7 +71,7 @@ export function printShiftCloseReport(bookings = [], options = {}) {
       <td class="sc-td sc-td-center sc-status">${escapeHtml(status)}</td>
       <td class="sc-td sc-td-center">${escapeHtml(String(payMode).toLowerCase())}</td>
       <td class="sc-td sc-td-center">${escapeHtml(b.pieces ?? '—')} / ${Number.isFinite(w) ? w : (b.weight ?? '—')}</td>
-      <td class="sc-td sc-td-right">RS. ${b.totalAmount != null ? Number(b.totalAmount).toLocaleString() : '—'}</td>
+      <td class="sc-td sc-td-right">RS. ${amountVal > 0 ? amountVal.toLocaleString() : '—'}</td>
     </tr>`
   }
 

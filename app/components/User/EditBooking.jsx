@@ -17,6 +17,23 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
   const [localError, setLocalError] = useState('')
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
 
+  const toNumber = (v) => {
+    if (v == null || v === '') return 0
+    const n = typeof v === 'object' && v !== null && typeof v.toString === 'function'
+      ? parseFloat(v.toString())
+      : Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const isCodBooking = (b) => {
+    const pm = String(b?.payMode ?? b?.paymentMode ?? '').toUpperCase()
+    if (pm === 'COD') return true
+    const serviceType = String(b?.service?.serviceType ?? '').toUpperCase()
+    if (serviceType === 'COD') return true
+    const prod = String(b?.product?.productName ?? b?.product?.productCode ?? '').toUpperCase()
+    return prod === 'COD'
+  }
+
   const [formData, setFormData] = useState({
     product: '',
     destination: '',
@@ -143,7 +160,7 @@ export default function EditBooking({ selectedShipment, setActivePage, setSelect
         // Financials (Handling Prisma Decimal as strings)
         rate: booking.rate?.toString() || '0',
         otherAmount: booking.otherAmount?.toString() || '0',
-        totalAmount: parseFloat(booking.totalAmount?.toString() || '0'),
+        totalAmount: toNumber(booking.totalAmount),
         codAmount: booking.codAmount?.toString() || '0',
         customerRef: booking.dcReferenceNo || '',
         declaredValue: booking.declaredValue?.toString() || '0',
