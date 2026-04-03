@@ -92,13 +92,6 @@ export function printBookingSlip(booking, options = {}) {
 
   const totalNum = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0))
 
-  // GST 16% and Fuel Surcharge 15% on service charges; TOTAL = Service Charges + GST + Fuel
-  const GST_RATE = 0.16
-  const FUEL_RATE = 0.15
-  const gstAmount = totalNum * GST_RATE
-  const fuelSurchargeAmount = totalNum * FUEL_RATE
-  const paymentTotal = totalNum + gstAmount + fuelSurchargeAmount
-
   // Handling instructions and Remarks: support %%%REMARKS%%% in handlingInstructions, or separate fields
   const handlingRaw = b.handlingInstructions || ''
   let instructions = '—'
@@ -200,12 +193,10 @@ export function printBookingSlip(booking, options = {}) {
         <div class="section-title">Payment Details</div>
         <table class="payment-table">
           <tr><td class="pay-label">Service Charges:</td><td class="pay-val">${escapeHtml(formatDecimal(totalNum))}</td></tr>
-          <tr><td class="pay-label">GST (16%):</td><td class="pay-val">${escapeHtml(formatDecimal(gstAmount))}</td></tr>
-          <tr><td class="pay-label">Fuel Surcharge (15%):</td><td class="pay-val">${escapeHtml(formatDecimal(fuelSurchargeAmount))}</td></tr>
           ${discount > 0 ? `<tr><td class="pay-label">Discount:</td><td class="pay-val">${escapeHtml(formatDecimal(discount))}</td></tr>` : ''}
           ${valueAddedService > 0 ? `<tr><td class="pay-label">Other Amount (Add):</td><td class="pay-val">${escapeHtml(formatDecimal(valueAddedService))}</td></tr>` : ''}
           ${isCod && codAmt > 0 ? `<tr><td class="pay-label">COD Amount:</td><td class="pay-val">${escapeHtml(formatDecimal(codAmt))}</td></tr>` : ''}
-          <tr><td class="pay-label pay-total">TOTAL:</td><td class="pay-val pay-total">${escapeHtml(formatDecimal(paymentTotal))}</td></tr>
+          <tr><td class="pay-label pay-total">TOTAL:</td><td class="pay-val pay-total">${escapeHtml(formatDecimal(totalNum))}</td></tr>
         </table>
       </div>
 
