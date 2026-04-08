@@ -46,6 +46,13 @@ export class UsersController {
     return this.usersService.approveCustomer(id, staffCode);
   }
 
+  @Delete(':id/reject')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Reject pending customer (SUPER_ADMIN only)' })
+  rejectPendingCustomer(@Param('id') id: string) {
+    return this.usersService.rejectPendingCustomer(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   findOne(@Param('id') id: string) {

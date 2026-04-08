@@ -78,6 +78,10 @@ export default function UserBookingConsignment() {
     preferredDeliveryTime: '',
   })
   const [showOnTimeDeliveryModal, setShowOnTimeDeliveryModal] = useState(false)
+  const [showApprovedCustomerModal, setShowApprovedCustomerModal] = useState(false)
+  const [approvedCustomers, setApprovedCustomers] = useState([])
+  const [approvedCustomersLoading, setApprovedCustomersLoading] = useState(false)
+  const [approvedCustomerSearch, setApprovedCustomerSearch] = useState('')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
@@ -87,6 +91,31 @@ export default function UserBookingConsignment() {
   useEffect(() => {
     dispatch(fetchAllPricing())
   }, [dispatch])
+
+  const fetchApprovedCustomers = async () => {
+    setApprovedCustomersLoading(true)
+    try {
+      const result = await api.getUsers()
+      const users = Array.isArray(result) ? result : result?.data || []
+      const approved = users.filter(
+        (u) => String(u?.role || '').toUpperCase() === 'USER' && u?.isActive === true && u?.staffCode
+      )
+      setApprovedCustomers(approved)
+    } catch (err) {
+      console.error('Error fetching approved customers:', err)
+      setToast({
+        isVisible: true,
+        message: err?.message || 'Failed to load approved customers',
+        type: 'error',
+      })
+    } finally {
+      setApprovedCustomersLoading(false)
+    }
+  }
+
+  const openApprovedCustomerModal = () => {
+    setShowApprovedCustomerModal(true)
+  }
 
   // CN Number: when customer selects COD product, get next CN from API (same format as admin)
   useEffect(() => {
@@ -113,6 +142,19 @@ export default function UserBookingConsignment() {
     }
     setFormData(prev => ({ ...prev, cnNumber: '' }))
   }, [formData.product])
+
+  useEffect(() => {
+    const shouldAutoPrompt = formData.product === 'COD' && formData.payMode === 'Cash'
+    if (shouldAutoPrompt && !formData.customerRef) {
+      setShowApprovedCustomerModal(true)
+    }
+  }, [formData.product, formData.payMode])
+
+  useEffect(() => {
+    if (showApprovedCustomerModal && !approvedCustomersLoading && approvedCustomers.length === 0) {
+      void fetchApprovedCustomers()
+    }
+  }, [showApprovedCustomerModal])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -142,6 +184,13 @@ export default function UserBookingConsignment() {
       }
       return updated
     })
+  }
+
+  const handleSelectApprovedCustomer = (customer) => {
+    const code = customer?.staffCode || ''
+    setFormData((prev) => ({ ...prev, customerRef: code }))
+    setShowApprovedCustomerModal(false)
+    setApprovedCustomerSearch('')
   }
   // Auto-open document modal when service requiring documents is selected
   useEffect(() => {
@@ -914,7 +963,85 @@ export default function UserBookingConsignment() {
         onOpenSubservicesModal={() => setShowSubservicesModal(true)}
         subservicesData={subservicesData}
         onOpenOnTimeDeliveryModal={() => setShowOnTimeDeliveryModal(true)}
+        onOpenApprovedCustomersModal={openApprovedCustomerModal}
+        isCustomerRefLocked={formData.product === 'COD' && formData.payMode === 'Cash'}
       />
+
+      {showApprovedCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Select Approved Customer</h3>
+                <p className="text-xs text-gray-500">Customer Ref # will be filled with selected customer code</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApprovedCustomerModal(false)}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <input
+                type="text"
+                value={approvedCustomerSearch}
+                onChange={(e) => setApprovedCustomerSearch(e.target.value)}
+                placeholder="Search by username, email, or customer code..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+              />
+
+              <div className="max-h-80 overflow-y-auto border border-gray-100 rounded-lg">
+                {approvedCustomersLoading ? (
+                  <div className="p-6 text-center text-sm text-gray-500">Loading approved customers...</div>
+                ) : (
+                  <>
+                    {approvedCustomers
+                      .filter((u) => {
+                        const q = approvedCustomerSearch.trim().toLowerCase()
+                        if (!q) return true
+                        return (
+                          String(u?.username || '').toLowerCase().includes(q) ||
+                          String(u?.email || '').toLowerCase().includes(q) ||
+                          String(u?.staffCode || '').toLowerCase().includes(q)
+                        )
+                      })
+                      .map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => handleSelectApprovedCustomer(u)}
+                          className="w-full px-4 py-3 text-left border-b last:border-b-0 border-gray-100 hover:bg-sky-50 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">{u.username || '—'}</p>
+                              <p className="text-xs text-gray-500">{u.email || 'No email'}</p>
+                            </div>
+                            <div className="text-sm font-bold text-sky-700">{u.staffCode}</div>
+                          </div>
+                        </button>
+                      ))}
+                    {approvedCustomers.filter((u) => {
+                      const q = approvedCustomerSearch.trim().toLowerCase()
+                      if (!q) return true
+                      return (
+                        String(u?.username || '').toLowerCase().includes(q) ||
+                        String(u?.email || '').toLowerCase().includes(q) ||
+                        String(u?.staffCode || '').toLowerCase().includes(q)
+                      )
+                    }).length === 0 && (
+                      <div className="p-6 text-center text-sm text-gray-500">No approved customers found.</div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shipper Section */}
       <UserShipper formData={formData} handleInputChange={handleInputChange} handleSubmit={handleSubmit} />

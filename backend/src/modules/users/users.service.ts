@@ -91,6 +91,26 @@ export class UsersService {
     });
   }
 
+  /**
+   * Reject a pending customer signup by deleting the pending USER account.
+   * Only USER accounts with isActive=false can be rejected.
+   */
+  async rejectPendingCustomer(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    if (user.role !== 'USER') {
+      throw new BadRequestException('Can only reject customer (USER role) accounts');
+    }
+    if (user.isActive) {
+      throw new BadRequestException('Can only reject pending (inactive) customer accounts');
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -134,7 +154,16 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const user = await this.findOne(id);
+
+    // For customer accounts, delete the DB row so it is fully removed from lists.
+    const isCustomerUser = String(user.role || '').toUpperCase() === 'USER';
+    if (isCustomerUser) {
+      await this.prisma.user.delete({ where: { id } });
+      return { deleted: true, id };
+    }
+
+    // Keep existing soft-delete behavior for staff/admin accounts.
     return this.prisma.user.update({
       where: { id },
       data: { isActive: false },

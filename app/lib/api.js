@@ -515,9 +515,20 @@ export const api = {
   /**
    * Approve a customer (SUPER_ADMIN only)
    */
-  async approveCustomer(id) {
+  async approveCustomer(id, staffCode) {
     const response = await this.request(`/users/${id}/approve`, {
       method: 'PATCH',
+      body: JSON.stringify({ staffCode }),
+    })
+    return this.handleResponse(response)
+  },
+
+  /**
+   * Reject pending customer signup (SUPER_ADMIN only)
+   */
+  async rejectPendingCustomer(id) {
+    const response = await this.request(`/users/${id}`, {
+      method: 'DELETE',
     })
     return this.handleResponse(response)
   },

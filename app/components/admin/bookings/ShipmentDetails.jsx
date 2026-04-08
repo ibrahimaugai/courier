@@ -44,8 +44,11 @@ export default function ShipmentDetails({
   onOpenSubservicesModal,
   subservicesData = {},
   onOpenOnTimeDeliveryModal,
+  onOpenApprovedCustomersModal,
+  isCustomerRefLocked = false,
 }) {
   const isOnTimeService = formData.product === 'General' && formData.services === 'On Time Service'
+  const isCodCashMode = formData.product === 'COD' && formData.payMode === 'Cash'
   const hasPreferredDelivery = !!(formData.preferredDeliveryDate || formData.preferredDeliveryTime)
   const formatDeliveryDate = (dateStr) => {
     if (!dateStr) return ''
@@ -343,16 +346,29 @@ export default function ShipmentDetails({
 
               {/* Customer Ref # */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Customer Ref #
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Customer Ref #
+                  </label>
+                  {isCodCashMode && onOpenApprovedCustomersModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenApprovedCustomersModal}
+                      className="text-xs font-semibold text-sky-600 hover:text-sky-800 underline"
+                    >
+                      Select Approved Customer
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   name="customerRef"
                   value={formData.customerRef || ''}
                   onChange={handleInputChange}
-                  placeholder="Enter customer reference"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors"
+                  readOnly={isCustomerRefLocked}
+                  placeholder={isCodCashMode ? 'Select approved customer' : 'Enter customer reference'}
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors ${isCustomerRefLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-300' : 'border-gray-300'
+                    }`}
                 />
               </div>
 

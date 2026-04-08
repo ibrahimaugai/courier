@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Loader2, CheckCircle, X, UserCheck, Search } from 'lucide-react'
+import { Users, Loader2, CheckCircle, X, UserCheck, Search, UserX } from 'lucide-react'
 import { api } from '../../lib/api'
 
 export default function CustomerApproval() {
@@ -10,6 +10,7 @@ export default function CustomerApproval() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [approvingId, setApprovingId] = useState(null)
+  const [rejectingId, setRejectingId] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
 
   const fetchPending = async () => {
@@ -54,6 +55,26 @@ export default function CustomerApproval() {
       setError(err?.message || 'Failed to approve customer')
     } finally {
       setApprovingId(null)
+    }
+  }
+
+  const handleReject = async (customer) => {
+    if (!customer?.id) return
+
+    const confirmed = window.confirm(`Reject ${customer.username}? This will delete the pending account record.`)
+    if (!confirmed) return
+
+    setRejectingId(customer.id)
+    setError('')
+    try {
+      await api.rejectPendingCustomer(customer.id)
+      setCustomers((prev) => prev.filter((c) => c.id !== customer.id))
+      setSuccess(`${customer.username} has been rejected and removed`)
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError(err?.message || 'Failed to reject customer')
+    } finally {
+      setRejectingId(null)
     }
   }
 
@@ -212,22 +233,37 @@ export default function CustomerApproval() {
                         {new Date(customer.createdAt).toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCustomer(customer)
-                            setCustomerCode('')
-                          }}
-                          disabled={approvingId === customer.id}
-                          className="px-4 py-2 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
-                        >
-                          {approvingId === customer.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <UserCheck className="w-4 h-4" />
-                          )}
-                          Approve
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCustomer(customer)
+                              setCustomerCode('')
+                            }}
+                            disabled={approvingId === customer.id || rejectingId === customer.id}
+                            className="px-4 py-2 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {approvingId === customer.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <UserCheck className="w-4 h-4" />
+                            )}
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReject(customer)}
+                            disabled={approvingId === customer.id || rejectingId === customer.id}
+                            className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {rejectingId === customer.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <UserX className="w-4 h-4" />
+                            )}
+                            Reject
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
