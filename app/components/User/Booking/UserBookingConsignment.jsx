@@ -18,6 +18,7 @@ import OnTimeDeliveryModal from '../../admin/bookings/OnTimeDeliveryModal'
 export default function UserBookingConsignment() {
   const dispatch = useDispatch()
   const { rules: reduxRules, cities, services: reduxServices, isLoading: pricingLoading } = useSelector((state) => state.pricing)
+  const authUser = useSelector((state) => state.auth?.user)
   const { services: ATTESTATION_SERVICE_VALUES } = useAttestationServices()
 
 
@@ -144,11 +145,28 @@ export default function UserBookingConsignment() {
   }, [formData.product])
 
   useEffect(() => {
-    const shouldAutoPrompt = formData.product === 'COD' && formData.payMode === 'Cash'
+    const isLoggedInUser =
+      String(authUser?.role || '').toUpperCase() === 'USER' &&
+      Boolean(authUser?.staffCode)
+    const shouldAutoPrompt = formData.product === 'COD' && formData.payMode === 'Cash' && !isLoggedInUser
     if (shouldAutoPrompt && !formData.customerRef) {
       setShowApprovedCustomerModal(true)
     }
-  }, [formData.product, formData.payMode])
+  }, [authUser?.role, authUser?.staffCode, formData.customerRef, formData.product, formData.payMode])
+
+  // Auto-fill customer ref from logged-in approved USER account (staffCode).
+  useEffect(() => {
+    const localUser =
+      typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem('user') || '{}')
+        : {}
+    const effectiveUser = authUser?.id ? authUser : localUser
+    const isApprovedUser = String(effectiveUser?.role || '').toUpperCase() === 'USER' && Boolean(effectiveUser?.staffCode)
+    if (!isApprovedUser) return
+    const code = String(effectiveUser.staffCode || '').trim()
+    if (!code) return
+    setFormData((prev) => (prev.customerRef === code ? prev : { ...prev, customerRef: code }))
+  }, [authUser])
 
   useEffect(() => {
     if (showApprovedCustomerModal && !approvedCustomersLoading && approvedCustomers.length === 0) {
@@ -904,7 +922,7 @@ export default function UserBookingConsignment() {
         otherAmount: '',
         codAmount: '',
         totalAmount: 0,
-        customerRef: '',
+        customerRef: String(authUser?.role || '').toUpperCase() === 'USER' && authUser?.staffCode ? authUser.staffCode : '',
         originCity: '',
         preferredDeliveryDate: '',
         preferredDeliveryTime: '',
@@ -963,8 +981,15 @@ export default function UserBookingConsignment() {
         onOpenSubservicesModal={() => setShowSubservicesModal(true)}
         subservicesData={subservicesData}
         onOpenOnTimeDeliveryModal={() => setShowOnTimeDeliveryModal(true)}
-        onOpenApprovedCustomersModal={openApprovedCustomerModal}
-        isCustomerRefLocked={formData.product === 'COD' && formData.payMode === 'Cash'}
+        onOpenApprovedCustomersModal={
+          String(authUser?.role || '').toUpperCase() === 'USER' && authUser?.staffCode
+            ? undefined
+            : openApprovedCustomerModal
+        }
+        isCustomerRefLocked={
+          (formData.product === 'COD' && formData.payMode === 'Cash') ||
+          (String(authUser?.role || '').toUpperCase() === 'USER' && Boolean(authUser?.staffCode))
+        }
       />
 
       {showApprovedCustomerModal && (
