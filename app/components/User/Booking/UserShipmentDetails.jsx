@@ -62,6 +62,13 @@ export default function UserShipmentDetails({
     )
   }, [cities])
 
+  const filteredCities = useMemo(() => {
+    if (formData.product === 'International') {
+      return activeCities.filter(city => (city.cityName || '').toLowerCase().startsWith('intl-'))
+    }
+    return activeCities
+  }, [activeCities, formData.product])
+
   // Determine which document section to show based on selected service
   const getDocumentSectionInfo = () => {
     const service = formData.services || ''
@@ -195,26 +202,28 @@ export default function UserShipmentDetails({
             </div>
 
             {/* Origin City */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Origin City <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="originCity"
-                value={formData.originCity}
-                onChange={handleInputChange}
-                required
-                disabled={isReadOnly}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors disabled:bg-gray-100"
-              >
-                <option value="">Select Origin</option>
-                {activeCities.map(city => (
-                  <option key={`origin-${city.id}`} value={city.id}>
-                    {city.cityName} ({city.cityCode})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {formData.product !== 'International' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Origin City <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="originCity"
+                  value={formData.originCity}
+                  onChange={handleInputChange}
+                  required
+                  disabled={isReadOnly}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors disabled:bg-gray-100"
+                >
+                  <option value="">Select Origin</option>
+                  {filteredCities.map(city => (
+                    <option key={`origin-${city.id}`} value={city.id}>
+                      {city.cityName} ({city.cityCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Destination */}
             <div>
@@ -230,7 +239,7 @@ export default function UserShipmentDetails({
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white transition-colors disabled:bg-gray-100"
               >
                 <option value="">Select Destination</option>
-                {activeCities.map(city => (
+                {filteredCities.map(city => (
                   <option key={`dest-${city.id}`} value={city.id}>
                     {city.cityName} ({city.cityCode})
                   </option>

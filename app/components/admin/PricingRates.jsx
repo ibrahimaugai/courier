@@ -183,6 +183,12 @@ export default function PricingRates() {
 
   // Memos for active lists (for filters and grid)
   const activeCities = useMemo(() => cities.filter(c => c.status === 'active'), [cities])
+  const filteredCities = useMemo(() => {
+    if (filters.serviceType === 'International') {
+      return activeCities.filter(city => city.cityName.toLowerCase().startsWith('intl-'))
+    }
+    return activeCities
+  }, [activeCities, filters.serviceType])
   const activeServices = useMemo(() => services.filter(s => s.status === 'active'), [services])
 
   // Full list of services for the selected product type
@@ -525,7 +531,7 @@ export default function PricingRates() {
               className="px-4 py-2 border-2 border-emerald-600 text-emerald-600 bg-white rounded-md hover:bg-emerald-50 transition-colors flex items-center gap-2 font-medium"
             >
               <MapPin className="w-4 h-4" />
-              Manage Cities
+              Manage Cities/Countries
             </button>
             <button
               onClick={() => setShowServiceModal(true)}
@@ -562,27 +568,36 @@ export default function PricingRates() {
             </select>
           </div>
 
-          <div className="w-full md:w-48">
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Origin</label>
-            <select
-              value={filters.originCity}
-              onChange={(e) => setFilters(f => ({ ...f, originCity: e.target.value }))}
-              className="w-full px-4 py-2 bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-sky-500 outline-none text-sm font-medium"
-            >
-              <option value="">All Origins</option>
-              {activeCities.map(city => <option key={city.id} value={city.id}>{city.cityName}</option>)}
-            </select>
-          </div>
+          {filters.serviceType !== 'International' && (
+            <div className="w-full md:w-48">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Origin</label>
+              <select
+                value={filters.originCity}
+                onChange={(e) => setFilters(f => ({ ...f, originCity: e.target.value }))}
+                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-sky-500 outline-none text-sm font-medium"
+              >
+                <option value="">All Origins</option>
+                {filteredCities.map(city => <option key={city.id} value={city.id}>{city.cityName}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="w-full md:w-48">
             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Destination</label>
             <select
               value={filters.destinationCity}
-              onChange={(e) => setFilters(f => ({ ...f, destinationCity: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value
+                if (filters.serviceType === 'International') {
+                  setFilters(f => ({ ...f, originCity: val, destinationCity: val }))
+                } else {
+                  setFilters(f => ({ ...f, destinationCity: val }))
+                }
+              }}
               className="w-full px-4 py-2 bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-sky-500 outline-none text-sm font-medium"
             >
               <option value="">All Destinations</option>
-              {activeCities.map(city => <option key={city.id} value={city.id}>{city.cityName}</option>)}
+              {filteredCities.map(city => <option key={city.id} value={city.id}>{city.cityName}</option>)}
             </select>
           </div>
 
@@ -1023,8 +1038,8 @@ export default function PricingRates() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="bg-emerald-600 p-6 flex items-center justify-between">
               <div className="text-white">
-                <h2 className="text-xl font-black uppercase tracking-tight">City Management</h2>
-                <p className="text-emerald-100 text-xs font-bold">Manage operational cities and their identifiers</p>
+                <h2 className="text-xl font-black uppercase tracking-tight">City/Country Management</h2>
+                <p className="text-emerald-100 text-xs font-bold">Manage operational cities/countires and their identifiers</p>
               </div>
               <button
                 onClick={() => setShowCityModal(false)}
@@ -1039,17 +1054,17 @@ export default function PricingRates() {
               <div className="space-y-6">
                 <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-100">
                   <h3 className="text-sm font-black text-emerald-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add New City
+                    <Plus className="w-4 h-4" /> Add New City/Country
                   </h3>
                   <form onSubmit={handleCreateCity} className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black text-emerald-600 uppercase mb-1">City Name (e.g. Islamabad)</label>
+                      <label className="block text-[10px] font-black text-emerald-600 uppercase mb-1">City/Country Name </label>
                       <input
                         type="text"
                         required
                         value={newCity.cityName}
                         onChange={e => setNewCity(s => ({ ...s, cityName: e.target.value }))}
-                        placeholder="Islamabad"
+                        placeholder="Islamabad or INTL-Saudia Arab"
                         className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-emerald-900"
                       />
                     </div>
@@ -1061,7 +1076,7 @@ export default function PricingRates() {
                         maxLength={3}
                         value={newCity.cityCode}
                         onChange={e => setNewCity(s => ({ ...s, cityCode: e.target.value.toUpperCase() }))}
-                        placeholder="ISB"
+                        placeholder="ISB or SAU"
                         className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-emerald-900"
                       />
                     </div>
@@ -1070,20 +1085,20 @@ export default function PricingRates() {
                       disabled={isCitySubmitting}
                       className="w-full bg-emerald-600 text-white py-3 rounded-lg font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
                     >
-                      {isCitySubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add City'}
+                      {isCitySubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Add City/Country'}
                     </button>
                   </form>
                 </div>
 
                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 leading-relaxed italic">
-                  <strong>Technical Note:</strong> When you add a new city, it will become available in the Origin and Destination filters globally. Pricing rules for new routes will need to be configured separately.
+                  <strong>Important Note:</strong> For adding a country, type "INTL-" before the country name please.
                 </div>
               </div>
 
               {/* Right: Existing Cities List */}
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <MapPin className="w-4 h-4" /> Operational Cities
+                  <MapPin className="w-4 h-4" /> Operational Cities/Countries
                 </h3>
                 <div className="grid grid-cols-1 gap-3">
                   {cities.length === 0 ? (

@@ -184,6 +184,11 @@ export default function UserBookingConsignment() {
         ...prev,
         [name]: value
       }
+
+      if (name === 'destination' && prev.product === 'International') {
+        updated.originCity = value
+      }
+
       // Reset services when product changes
       if (name === 'product') {
         updated.services = ''

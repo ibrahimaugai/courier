@@ -75,7 +75,12 @@ export function printBookingSlip(booking, options = {}) {
   // Origin/Dest codes from frontend/API (e.g. LHE-SLT). Use cityCode only; no guess from city name.
   const originCode = (b.originCity?.cityCode || b.originCity?.code || '').toString().trim().toUpperCase() || '—'
   const destCode = (b.destinationCity?.cityCode || b.destinationCity?.code || '').toString().trim().toUpperCase() || '—'
-  const orgDest = `${originCode}-${destCode}`
+  
+  let orgDest = `${originCode}-${destCode}`
+  const productVal = b.product?.productName || b.product?.name || b.productId || ''
+  if (productVal === 'International') {
+    orgDest = `PAK-${destCode}`
+  }
 
   // Payment Details breakdown
   const rateVal = b.rate != null ? Number(b.rate) : 0
