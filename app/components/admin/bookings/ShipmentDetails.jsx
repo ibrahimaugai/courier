@@ -67,13 +67,6 @@ export default function ShipmentDetails({
     .filter(city => city && city.status === 'active')
     .sort((a, b) => a.cityName.localeCompare(b.cityName))
 
-  const filteredCities = useMemo(() => {
-    if (formData.product === 'International') {
-      return activeCities.filter(city => city.cityName.toLowerCase().startsWith('intl-'))
-    }
-    return activeCities
-  }, [activeCities, formData.product])
-
   // Get available products (service types) - Fixed whitelist
   const availableProducts = PRODUCT_TYPES
 

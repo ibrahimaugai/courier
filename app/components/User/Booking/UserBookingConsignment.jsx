@@ -88,6 +88,26 @@ export default function UserBookingConsignment() {
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' })
   const [documentFiles, setDocumentFiles] = useState([])
 
+  // Ensure selected origin/destination match selected product (prevent INTL-* leakage)
+  useEffect(() => {
+    if (!cities?.length) return
+    const isIntlCityId = (id) => {
+      if (!id) return false
+      const city = cities.find((c) => c?.id === id)
+      return String(city?.cityName || '').toLowerCase().startsWith('intl-')
+    }
+
+    if (formData.product === 'International') return
+
+    if (isIntlCityId(formData.originCity) || isIntlCityId(formData.destination)) {
+      setFormData((prev) => ({
+        ...prev,
+        originCity: isIntlCityId(prev.originCity) ? '' : prev.originCity,
+        destination: isIntlCityId(prev.destination) ? '' : prev.destination,
+      }))
+    }
+  }, [formData.product, formData.originCity, formData.destination, cities])
+
   // Fetch pricing data on mount
   useEffect(() => {
     dispatch(fetchAllPricing())
@@ -259,7 +279,7 @@ export default function UserBookingConsignment() {
 
       const { originCity, destination, services, product, weight, volumetricWeight } = formData
 
-      if (!services || !product || (!weight && !volumetricWeight)) {
+      if (!services || !product) {
         return 0
       }
 
@@ -269,10 +289,11 @@ export default function UserBookingConsignment() {
         return 0
       }
 
-      // 1. Calculate Applicable Weight (Max of physical and volumetric)
+      // 1. Calculate Applicable Weight (Max of physical and volumetric) for non-attestation services
       const physicalWeight = parseFloat(weight) || 0
       const volWeight = parseFloat(volumetricWeight) || 0
       const applicableWeight = Math.max(physicalWeight, volWeight)
+      if (!isAttestationServiceSelected && applicableWeight <= 0) return 0
 
       // For "Blue Box Xkg" services, use service "Blue Box" and weight X for pricing
       const blueBoxKgMatch = services && String(services).match(/^Blue Box (\d+)kg$/)
@@ -283,10 +304,12 @@ export default function UserBookingConsignment() {
       let applicableRules = []
 
       if (ATTESTATION_SERVICE_VALUES.includes(services)) {
-        applicableRules = reduxRules.filter(r =>
-          r.service?.serviceName === services &&
-          r.service?.serviceType === 'Attestation'
+        // Attestation/document services: be tolerant with serviceType casing/data drift.
+        const byName = reduxRules.filter((r) => r.service?.serviceName === services)
+        const attestationOnly = byName.filter((r) =>
+          String(r.service?.serviceType || '').toLowerCase() === 'attestation'
         )
+        applicableRules = attestationOnly.length > 0 ? attestationOnly : byName
       } else {
         applicableRules = reduxRules.filter(r =>
           r.originCityId === originCity &&
@@ -296,6 +319,12 @@ export default function UserBookingConsignment() {
       }
 
       if (applicableRules.length === 0) return 0
+
+      // Attestation services: show a base rate even without weight/origin/destination
+      if (isAttestationServiceSelected) {
+        const r0 = applicableRules[0] || {}
+        return parseFloat(r0.baseRate ?? r0.base_rate ?? r0.rate ?? 0) || 0
+      }
 
       // 3. Find exact weight tier match (use effectiveWeight for Blue Box Xkg)
       const weightForTier = effectiveService === 'Blue Box' && blueBoxKgMatch ? effectiveWeight : applicableWeight
@@ -379,8 +408,14 @@ export default function UserBookingConsignment() {
       totalAmount = formData.product === 'COD'
         ? shippingCharges + codAmt
         : shippingCharges
-    } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && (subservices > 0 || docTotal > 0 || other > 0 || formData.services)) {
-      totalAmount = docTotal + other + subservices
+    } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services) && (subservices > 0 || docTotal > 0 || other !== 0 || formData.services)) {
+      // Document/items (Attestation services shown under General):
+      // - Show subtotal in Rate field: (baseRate × pieces) + documents + subservices
+      // - Total = subtotal + otherAmount (+/-)
+      const baseRatePerPiece = rate > 0 ? rate : 0
+      const subtotal = (baseRatePerPiece * pcs) + docTotal + subservices
+      finalRate = subtotal
+      totalAmount = subtotal + other
     }
 
     setFormData(prev => ({

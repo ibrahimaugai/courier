@@ -97,6 +97,28 @@ export default function BookingConsignment() {
   const [approvedCustomersLoading, setApprovedCustomersLoading] = useState(false)
   const [approvedCustomerSearch, setApprovedCustomerSearch] = useState('')
 
+  // Ensure selected origin/destination match selected product (prevent INTL-* leakage)
+  useEffect(() => {
+    if (!cities?.length) return
+    const isIntlCityId = (id) => {
+      if (!id) return false
+      const city = cities.find((c) => c?.id === id)
+      return String(city?.cityName || '').toLowerCase().startsWith('intl-')
+    }
+
+    // International product: destination must be INTL-* (origin auto mirrors destination)
+    if (formData.product === 'International') return
+
+    // Non-International products: clear any selected INTL-* origin/destination
+    if (isIntlCityId(formData.originCity) || isIntlCityId(formData.destination)) {
+      setFormData((prev) => ({
+        ...prev,
+        originCity: isIntlCityId(prev.originCity) ? '' : prev.originCity,
+        destination: isIntlCityId(prev.destination) ? '' : prev.destination,
+      }))
+    }
+  }, [formData.product, formData.originCity, formData.destination, cities])
+
   // Fetch active batch on mount
   useEffect(() => {
     const fetchActiveBatch = async () => {
@@ -152,15 +174,19 @@ export default function BookingConsignment() {
   useEffect(() => {
     const calculateRate = () => {
       if (!formData.originCity || !formData.destination || !formData.services || !formData.product) {
-        return 0
+        // Attestation services (shown under General) do not require route/weight to show a base rate
+        const isAttestationServiceSelected = ATTESTATION_SERVICE_VALUES.includes(formData.services)
+        if (!isAttestationServiceSelected) return 0
       }
 
-      // Calculate applicable weight (max of physical and volumetric)
+      const isAttestationServiceSelected = ATTESTATION_SERVICE_VALUES.includes(formData.services)
+
+      // Calculate applicable weight (max of physical and volumetric) for non-attestation services
       const physicalWeight = parseFloat(formData.weight || '0')
       const volumetricWeight = parseFloat(formData.volumetricWeight || '0')
       const applicableWeight = Math.max(physicalWeight, volumetricWeight)
 
-      if (applicableWeight <= 0) return 0
+      if (!isAttestationServiceSelected && applicableWeight <= 0) return 0
 
       // For "Blue Box Xkg" services, use service "Blue Box" and weight X for pricing
       const blueBoxKgMatch = formData.services && String(formData.services).match(/^Blue Box (\d+)kg$/)
@@ -211,12 +237,14 @@ export default function BookingConsignment() {
         return entry ? entry[1] : 'N/A'
       }
 
-      const isAttestationServiceSelected = ATTESTATION_SERVICE_VALUES.includes(formData.services)
       if (isAttestationServiceSelected) {
-        applicableRules = reduxRules.filter(rule =>
-          rule.service?.serviceName === formData.services &&
-          rule.service?.serviceType === 'Attestation'
+        // Attestation/document services: be tolerant with serviceType casing/data drift.
+        // Some DB rows may still have serviceType = 'General' even if we treat them as Attestation in UI.
+        const byName = reduxRules.filter((rule) => rule.service?.serviceName === formData.services)
+        const attestationOnly = byName.filter((rule) =>
+          String(rule.service?.serviceType || '').toLowerCase() === 'attestation'
         )
+        applicableRules = attestationOnly.length > 0 ? attestationOnly : byName
 
         // Set Attestation Info
         if (applicableRules.length > 0) {
@@ -243,6 +271,13 @@ export default function BookingConsignment() {
       }
 
       if (applicableRules.length === 0) return 0
+
+      // Attestation services: show a base rate even without weight/origin/destination
+      if (isAttestationServiceSelected) {
+        const r0 = applicableRules[0] || {}
+        // Prisma maps base_rate -> baseRate in JS, but keep fallbacks for safety
+        return parseFloat(r0.baseRate ?? r0.base_rate ?? r0.rate ?? 0) || 0
+      }
 
       // Try to find exact weight tier match (use effectiveWeight for Blue Box Xkg)
       const weightForTier = effectiveService === 'Blue Box' && blueBoxKgMatch ? effectiveWeight : applicableWeight
@@ -302,9 +337,14 @@ export default function BookingConsignment() {
       const codAmt = parseFloat(formData.codAmount || '0') || 0
       totalAmount = formData.product === 'COD' ? shippingCharges + codAmt : shippingCharges
     } else if (ATTESTATION_SERVICE_VALUES.includes(formData.services)) {
-      // For Attestation services (shown under General), calculate total even without rate/weight/origin/destination
+      // For document/items (Attestation services shown under General):
+      // - Show subtotal in Rate field: (baseRate × pieces) + documents + subservices
+      // - Total = subtotal + otherAmount (+/-)
       if (formData.services) {
-        totalAmount = docTotal + other + subservices
+        const baseRatePerPiece = rate > 0 ? rate : 0
+        const subtotal = (baseRatePerPiece * pcs) + docTotal + subservices
+        finalRate = subtotal
+        totalAmount = subtotal + other
       }
     }
 

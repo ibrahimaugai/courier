@@ -90,12 +90,26 @@ export function printBookingSlip(booking, options = {}) {
   const payModeUpper = String(b.paymentMode || b.payMode || '').toUpperCase()
   const isCod = payModeUpper === 'COD'
 
-  const serviceChg = rateVal * piecesVal
   // Other Amount: positive = additional charges (Add), negative = discount
   const valueAddedService = otherVal > 0 ? otherVal : 0
   const discount = otherVal < 0 ? Math.abs(otherVal) : 0
 
-  const totalNum = b.totalAmount != null ? parseFloat(String(b.totalAmount)) : (serviceChg + otherVal + (isCod ? codAmt : 0))
+  // Prefer backend totalAmount when available (it may be authoritative),
+  // but always present "Service Charges" as the pre-discount/base amount.
+  const totalNum =
+    b.totalAmount != null
+      ? parseFloat(String(b.totalAmount))
+      : ((Number.isFinite(rateVal) ? rateVal : 0) * (Number.isFinite(piecesVal) ? piecesVal : 1)) +
+        (Number.isFinite(otherVal) ? otherVal : 0) +
+        (isCod && Number.isFinite(codAmt) ? codAmt : 0)
+
+  // Base service charges (before discount/additional otherAmount).
+  // This fixes cases where `rate` is saved as net-after-discount.
+  let serviceChg = totalNum - (Number.isFinite(otherVal) ? otherVal : 0) - (isCod ? (Number.isFinite(codAmt) ? codAmt : 0) : 0)
+  if (!Number.isFinite(serviceChg) || serviceChg < 0) {
+    const fallback = (Number.isFinite(rateVal) ? rateVal : 0) * (Number.isFinite(piecesVal) ? piecesVal : 1)
+    serviceChg = Number.isFinite(fallback) ? fallback : 0
+  }
 
   // Handling instructions and Remarks: support %%%REMARKS%%% in handlingInstructions, or separate fields
   const handlingRaw = b.handlingInstructions || ''
@@ -182,10 +196,14 @@ export function printBookingSlip(booking, options = {}) {
         <div class="section-title">Item Details</div>
         <table class="doc-table">
           <tr><th>Description</th><th>Qty</th></tr>
-          <tr>
-            <td>${b.subserviceNames.map((n) => `<div>${escapeHtml(n)}</div>`).join('')}</td>
-            <td>1</td>
-          </tr>
+          ${b.subserviceNames
+            .map(
+              (n) => `<tr>
+            <td>${escapeHtml(n)}</td>
+            <td style="text-align:right">1</td>
+          </tr>`,
+            )
+            .join('')}
         </table>
       </div>`
         : ''}
@@ -197,7 +215,7 @@ export function printBookingSlip(booking, options = {}) {
       <div class="section">
         <div class="section-title">Payment Details</div>
         <table class="payment-table">
-          <tr><td class="pay-label">Service Charges:</td><td class="pay-val">${escapeHtml(formatDecimal(totalNum))}</td></tr>
+          <tr><td class="pay-label">Service Charges:</td><td class="pay-val">${escapeHtml(formatDecimal(serviceChg))}</td></tr>
           ${discount > 0 ? `<tr><td class="pay-label">Discount:</td><td class="pay-val">${escapeHtml(formatDecimal(discount))}</td></tr>` : ''}
           ${valueAddedService > 0 ? `<tr><td class="pay-label">Other Amount (Add):</td><td class="pay-val">${escapeHtml(formatDecimal(valueAddedService))}</td></tr>` : ''}
           ${isCod && codAmt > 0 ? `<tr><td class="pay-label">COD Amount:</td><td class="pay-val">${escapeHtml(formatDecimal(codAmt))}</td></tr>` : ''}

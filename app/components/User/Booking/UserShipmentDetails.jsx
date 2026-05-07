@@ -63,10 +63,12 @@ export default function UserShipmentDetails({
   }, [cities])
 
   const filteredCities = useMemo(() => {
+    const isIntlCity = (city) => String(city?.cityName || '').toLowerCase().startsWith('intl-')
     if (formData.product === 'International') {
-      return activeCities.filter(city => (city.cityName || '').toLowerCase().startsWith('intl-'))
+      return activeCities.filter(isIntlCity)
     }
-    return activeCities
+    // For all non-International products, hide INTL-* cities
+    return activeCities.filter((c) => !isIntlCity(c))
   }, [activeCities, formData.product])
 
   // Determine which document section to show based on selected service
