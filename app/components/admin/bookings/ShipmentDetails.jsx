@@ -63,9 +63,24 @@ export default function ShipmentDetails({
     return `${h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
   }
   // Get all active operational cities
-  const activeCities = cities
-    .filter(city => city && city.status === 'active')
-    .sort((a, b) => a.cityName.localeCompare(b.cityName))
+  const activeCities = useMemo(() => {
+    const all = cities || []
+    const filtered = all.filter(city => {
+      if (!city) return false
+      return !city.status || city.status.toLowerCase() === 'active'
+    })
+    return (filtered.length > 0 ? filtered : all).sort((a, b) =>
+      (a.cityName || '').localeCompare(b.cityName || '')
+    )
+  }, [cities])
+
+  const filteredCities = useMemo(() => {
+    const isIntlCity = (city) => String(city?.cityName || '').toLowerCase().startsWith('intl-')
+    if (formData.product === 'International') {
+      return activeCities.filter(isIntlCity)
+    }
+    return activeCities.filter((c) => !isIntlCity(c))
+  }, [activeCities, formData.product])
 
   // Get available products (service types) - Fixed whitelist
   const availableProducts = PRODUCT_TYPES
